@@ -9,7 +9,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  REPO: git-graph
+  REPO: gleisbau
 
 jobs:
   release:

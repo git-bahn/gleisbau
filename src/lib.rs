@@ -1,6 +1,4 @@
-//! git-graph shows clear git graphs arranged for your branching model.
-//!
-//! It provides both a library and a command line tool.
+//! gleisbau generate clear git graphs arranged for your branching model.
 //!
 //! The main steps are:
 //! 1. Read branching model configuration (See [config] and [settings])

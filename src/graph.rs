@@ -3,8 +3,8 @@
 //! To generate a graph, call [GitGraph::new()].
 //!
 //! ### Visualization of branches
-//! git-graph uses the term *branch* a little different from how git uses it.
-//! In git-lingo this means "a label on some commit", whereas in git-graph
+//! gleisbau uses the term *branch* a little different from how git uses it.
+//! In git-lingo this means "a label on some commit", whereas in gleisbau
 //! it means "a path in the ancestor graph of a repository". Nodes are
 //! commits, edges are directed from a child to its parents.
 //!
@@ -12,7 +12,7 @@
 //! - *git-branch* is a label on a commit.
 //! - *branch* is the visualization of an ancestor path.
 //!
-//! git-graph visualizes branches as a vertical line. Only
+//! gleisbau visualizes branches as a vertical line. Only
 //! the primary parent of a commit can be on the same branch as the
 //! commit. Horizontal lines represent forks (multiple children) or
 //! merges (multiple parents), and show the remaining parent relations.
@@ -75,7 +75,7 @@ impl GitGraph {
         }
 
         if repository.is_shallow() {
-            return Err("ERROR: git-graph does not support shallow clones due to a missing feature in the underlying libgit2 library.".to_string());
+            return Err("ERROR: gleisbau does not support shallow clones due to a missing feature in the underlying libgit2 library.".to_string());
         }
 
         let head = HeadInfo::new(&repository.head().map_err(|err| err.message().to_string())?)?;
