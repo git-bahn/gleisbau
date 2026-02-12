@@ -22,6 +22,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Instructions related to the command line tool git-graph.
 
 
-## [0.7.0] - 2015-11-14
+## [0.7.0] - 2025-11-14
 
 Last release where library is part of git-graph.
+
+### Added
+
+- Start point for traversal
+- Lots of API docs
+- "trunk" as supported main branch name
+
+### Changed
+
+- Update git2 dependency to version 0.20
+
+### Removed
+
+- (BREAKING) GitGraph public fields "tags" and "branches"
+
+
+## [0.6.0] - 2024-05-24
+
+### Added
+
+- Reverse order option
