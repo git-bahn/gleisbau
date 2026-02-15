@@ -30,7 +30,10 @@ Last release where library is part of git-graph.
 
 - (BREAKING) graph::get_repo, add argument skip_repo_owner_validation
   false gives the previous behaviour.
-- Start point for traversal
+- (BREAKING) GitGraph::new, add argument start_point to control where
+  traversal should start.
+  Set to None to get the previous behaviour.
+  
 - Lots of API docs
 - "trunk" as supported main branch name
 
