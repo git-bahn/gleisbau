@@ -236,8 +236,11 @@ pub struct BranchInfo {
     pub target_branch: Option<usize>,
     pub name: String,
     pub persistence: u8,
+    /// Is branch a remote reference
     pub is_remote: bool,
+    /// Is branch derived from a merge summary
     pub is_merged: bool,
+    /// Is branch a tag reference
     pub is_tag: bool,
     pub visual: BranchVis,
     pub range: (Option<usize>, Option<usize>),
