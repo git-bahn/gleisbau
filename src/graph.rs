@@ -19,7 +19,7 @@
 
 use crate::print::colors::to_terminal_color;
 use crate::settings::{BranchOrder, BranchSettings, MergePatterns, Settings};
-use git2::{BranchType, Commit, Error, Oid, Reference, Repository};
+pub use git2::{BranchType, Commit, Error, Oid, Reference, Repository};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 

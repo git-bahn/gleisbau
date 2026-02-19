@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+
+- Reexport of git2::Repository
+  This allows some library users to remove a dependency on git2
+
 ### Removed
 
 - release workflow on github, as the library has no binary release.

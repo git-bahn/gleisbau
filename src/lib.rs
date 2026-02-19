@@ -9,7 +9,7 @@
 #![warn(clippy::cognitive_complexity)]
 #![warn(clippy::too_many_lines)]
 
-use git2::Repository;
+pub use git2::Repository;
 use std::path::Path;
 
 pub mod config;
