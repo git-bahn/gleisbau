@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - release workflow on github, as the library has no binary release.
+- Remove svg functionality
 
 
 ## [0.7.1] - 2026-02-09

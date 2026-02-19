@@ -28,7 +28,6 @@ serde = "1.0"
 serde_derive = {version = "1.0", default-features = false, optional = false}
 toml = "0.9"
 itertools = "0.14"
-svg = "0.18"
 lazy_static = "1.4"
 yansi = "1.0"
 atty = "0.2"

@@ -5,7 +5,6 @@ use std::cmp::max;
 
 pub mod colors;
 pub mod format;
-pub mod svg;
 pub mod unicode;
 
 /// Find the index at which a between-branch connection

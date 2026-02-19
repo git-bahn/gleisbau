@@ -104,21 +104,6 @@ matches = [
 # A list of colors that are used (alternating) for all branches
 # not matching any of the above pattern. 
 unknown = ['white']
-
-# Colors of branches in SVG output. 
-# Same structure as terminal_colors. 
-# For supported colors, see section Colors (below this listing).
-[svg_colors]
-matches = [
-    [
-        '^(master|main|trunk)$',
-        ['blue'],
-    ],
-    [ 
-        '...',
-    ]
-]
-unknown = ['gray']
 ```
 
 **Tags**
