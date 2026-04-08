@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reexport of git2::Repository
   This allows some library users to remove a dependency on git2
 
+### Changed
+
+- (BREAKING) GitGraph::new, add argument refspecs to control graph walk.
+
 ### Removed
 
 - release workflow on github, as the library has no binary release.
