@@ -1,8 +1,10 @@
-/*! The tracks map assigns a track to each commit. 
+/*! The tracks map assigns a track to each commit.
 
 It is expensive to compute because changes in one end may affect the other end.
 Fortunately it can be computed incrementally.
 */
+
+use std::collections::HashMap;
 
 use git2::Commit;
 use git2::Oid;
@@ -10,6 +12,20 @@ use git2::Oid;
 use crate::layout::BranchVis;
 
 
+
+/**
+    Group commits into tracks. A track is a sequence of commits
+    where every commit has a parent inside the track, except the oldest
+    commit.
+*/
+pub struct TrackMap {
+    /// List of commits in the map. Stores parent relations.
+    pub commits: Vec<CommitInfo>,
+    /// Mapping from commit id to index in `commits`
+    pub indices: HashMap<Oid, usize>,
+    /// All detected branches and tags, including merged and deleted
+    pub all_branches: Vec<BranchInfo>,
+}
 
 /// Represents a branch (real or derived from merge summary).
 pub struct BranchInfo {

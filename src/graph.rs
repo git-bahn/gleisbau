@@ -21,11 +21,15 @@ use crate::print::colors::to_terminal_color;
 use crate::settings::{BranchOrder, BranchSettings, MergePatterns, Settings};
 pub use git2::{BranchType, Commit, Error, Oid, Reference, Repository};
 use regex::Regex;
+
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 pub use crate::layout::BranchVis;
 pub use crate::track::BranchInfo;
 pub use crate::track::CommitInfo;
+pub use crate::track::TrackMap;
 
 const ORIGIN: &str = "origin/";
 const FORK: &str = "fork/";
@@ -33,11 +37,8 @@ const FORK: &str = "fork/";
 /// Represents a git history graph.
 pub struct GitGraph {
     pub repository: Repository,
-    pub commits: Vec<CommitInfo>,
-    /// Mapping from commit id to index in `commits`
-    pub indices: HashMap<Oid, usize>,
-    /// All detected branches and tags, including merged and deleted
-    pub all_branches: Vec<BranchInfo>,
+    /// Track structure, may be updated by a separate thread
+    pub tracks: Arc<Mutex<TrackMap>>,
     /// The current HEAD
     pub head: HeadInfo,
 }
@@ -208,9 +209,11 @@ impl GitGraph {
 
         Ok(GitGraph {
             repository,
-            commits: filtered_commits,
-            indices: filtered_indices,
-            all_branches,
+            tracks: Arc::new(Mutex::new(TrackMap {
+                commits: filtered_commits,
+                indices: filtered_indices,
+                all_branches,
+            })),
             head,
         })
     }
