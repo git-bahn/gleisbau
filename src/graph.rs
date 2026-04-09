@@ -23,6 +23,9 @@ pub use git2::{BranchType, Commit, Error, Oid, Reference, Repository};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 
+pub use crate::layout::BranchVis;
+pub use crate::track::BranchInfo;
+
 const ORIGIN: &str = "origin/";
 const FORK: &str = "fork/";
 
@@ -265,81 +268,6 @@ impl CommitInfo {
             branches: Vec::new(),
             tags: Vec::new(),
             branch_trace: None,
-        }
-    }
-}
-
-/// Represents a branch (real or derived from merge summary).
-pub struct BranchInfo {
-    pub target: Oid,
-    pub merge_target: Option<Oid>,
-    pub source_branch: Option<usize>,
-    pub target_branch: Option<usize>,
-    pub name: String,
-    pub persistence: u8,
-    /// Is branch a remote reference
-    pub is_remote: bool,
-    /// Is branch derived from a merge summary
-    pub is_merged: bool,
-    /// Is branch a tag reference
-    pub is_tag: bool,
-    pub visual: BranchVis,
-    pub range: (Option<usize>, Option<usize>),
-}
-impl BranchInfo {
-    #[allow(clippy::too_many_arguments)]
-    fn new(
-        target: Oid,
-        merge_target: Option<Oid>,
-        name: String,
-        persistence: u8,
-        is_remote: bool,
-        is_merged: bool,
-        is_tag: bool,
-        visual: BranchVis,
-        end_index: Option<usize>,
-    ) -> Self {
-        BranchInfo {
-            target,
-            merge_target,
-            target_branch: None,
-            source_branch: None,
-            name,
-            persistence,
-            is_remote,
-            is_merged,
-            is_tag,
-            visual,
-            range: (end_index, None),
-        }
-    }
-}
-
-/// Branch properties for visualization.
-pub struct BranchVis {
-    /// The branch's column group (left to right)
-    pub order_group: usize,
-    /// The branch's merge target column group (left to right)
-    pub target_order_group: Option<usize>,
-    /// The branch's source branch column group (left to right)
-    pub source_order_group: Option<usize>,
-    /// The branch's terminal color (index in 256-color palette)
-    pub term_color: u8,
-    /// SVG color (name or RGB in hex annotation)
-    pub svg_color: String,
-    /// The column the branch is located in
-    pub column: Option<usize>,
-}
-
-impl BranchVis {
-    fn new(order_group: usize, term_color: u8, svg_color: String) -> Self {
-        BranchVis {
-            order_group,
-            target_order_group: None,
-            source_order_group: None,
-            term_color,
-            svg_color,
-            column: None,
         }
     }
 }

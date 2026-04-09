@@ -14,8 +14,10 @@ use std::path::Path;
 
 pub mod config;
 pub mod graph;
+pub mod layout;
 pub mod print;
 pub mod settings;
+pub mod track;
 
 // Documentation only module,
 // see https://rustprojectprimer.com/documentation/rustdoc.html
