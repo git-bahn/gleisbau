@@ -25,6 +25,7 @@ use std::collections::{HashMap, HashSet};
 
 pub use crate::layout::BranchVis;
 pub use crate::track::BranchInfo;
+pub use crate::track::CommitInfo;
 
 const ORIGIN: &str = "origin/";
 const FORK: &str = "fork/";
@@ -244,31 +245,6 @@ impl HeadInfo {
             is_branch: head.is_branch(),
         };
         Ok(h)
-    }
-}
-
-/// Represents a commit.
-pub struct CommitInfo {
-    pub oid: Oid,
-    pub is_merge: bool,
-    pub parents: [Option<Oid>; 2],
-    pub children: Vec<Oid>,
-    pub branches: Vec<usize>,
-    pub tags: Vec<usize>,
-    pub branch_trace: Option<usize>,
-}
-
-impl CommitInfo {
-    fn new(commit: &Commit) -> Self {
-        CommitInfo {
-            oid: commit.id(),
-            is_merge: commit.parent_count() > 1,
-            parents: [commit.parent_id(0).ok(), commit.parent_id(1).ok()],
-            children: Vec::new(),
-            branches: Vec::new(),
-            tags: Vec::new(),
-            branch_trace: None,
-        }
     }
 }
 

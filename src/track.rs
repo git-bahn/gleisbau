@@ -4,6 +4,7 @@ It is expensive to compute because changes in one end may affect the other end.
 Fortunately it can be computed incrementally.
 */
 
+use git2::Commit;
 use git2::Oid;
 
 use crate::layout::BranchVis;
@@ -55,3 +56,31 @@ impl BranchInfo {
         }
     }
 }
+
+
+/// Represents a commit.
+pub struct CommitInfo {
+    pub oid: Oid,
+    pub is_merge: bool,
+    pub parents: [Option<Oid>; 2],
+    pub children: Vec<Oid>,
+    pub branches: Vec<usize>,
+    pub tags: Vec<usize>,
+    /// Index into TrackMap.all_branches
+    pub branch_trace: Option<usize>,
+}
+
+impl CommitInfo {
+    pub fn new(commit: &Commit) -> Self {
+        CommitInfo {
+            oid: commit.id(),
+            is_merge: commit.parent_count() > 1,
+            parents: [commit.parent_id(0).ok(), commit.parent_id(1).ok()],
+            children: Vec::new(),
+            branches: Vec::new(),
+            tags: Vec::new(),
+            branch_trace: None,
+        }
+    }
+}
+
