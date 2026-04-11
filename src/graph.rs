@@ -1,6 +1,6 @@
 //! A graph structure representing the history of a Git repository.
 //!
-//! To generate a graph, call [GitGraph::new()].
+//! To generate a [GitGraph], you must use [Builder] to construct it.
 //!
 //! ### Visualization of branches
 //! gleisbau uses the term *branch* a little different from how git uses it.
@@ -38,9 +38,59 @@ pub struct GitGraph {
     pub head: HeadInfo,
 }
 
+/** Builder of a GitGraph struct. This handles one-time processing of the
+repository. */
+#[derive(Default)]
+pub struct Builder<'a> {
+    repository: Option<Repository>,
+    settings: Option<&'a Settings>,
+    start_point: Option<String>,
+    max_count: Option<usize>,
+    refspecs: Vec<String>,
+}
+
+impl<'a> Builder<'a> {
+    pub fn new() -> Self {
+        Builder::default()
+    }
+    pub fn with_repository(mut self, repository: Repository) -> Self {
+        self.repository = Some(repository);
+        self
+    }
+    pub fn with_settings(mut self, settings: &'a Settings) -> Self {
+        self.settings = Some(settings);
+        self
+    }
+    pub fn with_start_point(mut self, start_point: String) -> Self {
+        self.start_point = Some(start_point);
+        self
+    }
+    pub fn with_max_count(mut self, max_count: usize) -> Self {
+        self.max_count = Some(max_count);
+        self
+    }
+    pub fn with_refspecs(mut self, refspecs: Vec<String>) -> Self {
+        self.refspecs = refspecs;
+        self
+    }
+    pub fn build(self) -> Result<GitGraph, String> {
+        GitGraph::new(
+            self.repository.expect("You must specify repository"),
+            self.settings.expect("You must specify settings"),
+            self.start_point,
+            self.max_count,
+            self.refspecs,
+        )
+    }
+}
+
 impl GitGraph {
-    /// Generate a branch graph for a repository
-    pub fn new(
+    // TODO Move all GitGraph construction functionality to Builder
+
+    /// Generate a branch graph for a repository.
+    /// It has been made private as a migration step towards a new API.
+    /// You must use [Builder] to construct a GitGraph instance.
+    fn new(
         mut repository: Repository,
         settings: &Settings,
         start_point: Option<String>,
