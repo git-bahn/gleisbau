@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+
+## [0.7.2] - 2026-04-14
+
 ### Added
 
 - Reexport of git2::Repository
