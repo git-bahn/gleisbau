@@ -17,6 +17,12 @@ pub mod graph;
 pub mod print;
 pub mod settings;
 
+// Documentation only module,
+// see https://rustprojectprimer.com/documentation/rustdoc.html
+pub mod _0_7_x_refactor {
+    #![doc = include_str!("../docs/refactoring.md")]
+}
+
 pub fn get_repo<P: AsRef<Path>>(
     path: P,
     skip_repo_owner_validation: bool,
