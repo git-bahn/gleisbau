@@ -20,3 +20,25 @@ Some final UI elements will be moved from the library to applications
 All of this must be done while preserving some of [git-graph](https://github.com/git-bahn/git-graph)'s most noticable features:
 - Configurable branch priority, ordering, and colouring
 - Stable branch layout - the subset size should not affect how branches are rendered.
+
+# Step: Split GitGraph
+
+I need to split GitGraph data to get a different coupling.
+This will be done so legacy code can still use GitGraph with only some
+API changes.
+
+Reverse the link between BranchInfo and BranchViz.
+BranchInfo will be built when traversing the graph, and must not know
+anything visualization.
+BranchViz will be built repeatedly when rendering, from BranchInfo.
+
+## AS-IS
+
+GitGraph --> BranchInfo --> BranchVis
+
+## TO-BE
+
+
+TrackMap --> BranchInfo
+GitGraph --> TrackMap
+GitGraph --> BranchVis
