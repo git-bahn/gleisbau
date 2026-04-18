@@ -21,6 +21,21 @@ All of this must be done while preserving some of [git-graph](https://github.com
 - Configurable branch priority, ordering, and colouring
 - Stable branch layout - the subset size should not affect how branches are rendered.
 
+# Step: Introduce Builder
+
+I need to split GitGraph into two parts: Mapping of tracks and layout of graph.
+The GitGraph structure is used by applications as if it was the final render,
+therefore it belongs with the layout. However, GitGraph::new does a full
+mapping of tracks as well as layout.
+
+This should be split into two steps, none controlled by GitGraph
+
+- Tracking branches
+- Layout of branches
+
+The start of ths separation is to introduce the builder pattern. This is closer
+to how the final code will work.
+
 # Step: Split GitGraph
 
 I need to split GitGraph data to get a different coupling.
