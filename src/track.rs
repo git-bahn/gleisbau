@@ -84,8 +84,6 @@ pub struct CommitInfo {
     pub is_merge: bool,
     pub parents: [Option<Oid>; 2],
     pub children: Vec<Oid>,
-    pub branches: Vec<usize>,
-    pub tags: Vec<usize>,
     /// Index into TrackMap.all_branches
     pub branch_trace: Option<usize>,
 }
@@ -97,8 +95,6 @@ impl CommitInfo {
             is_merge: commit.parent_count() > 1,
             parents: [commit.parent_id(0).ok(), commit.parent_id(1).ok()],
             children: Vec::new(),
-            branches: Vec::new(),
-            tags: Vec::new(),
             branch_trace: None,
         }
     }
@@ -215,19 +211,17 @@ pub fn assign_branches(
 
     let mut branches = extract_branches(repository, commits, indices, settings)?;
 
+    // We only want to keep branches that has assigned some commit,
+    // or that is merged into some other branch.
+    // Compute branch index map that deletes the unwanted.
     let mut index_map: Vec<_> = (0..branches.len())
         .map(|old_idx| {
-            let (target, is_tag, is_merged) = {
+            let (target, is_merged) = {
                 let branch = &branches[old_idx];
-                (branch.target, branch.is_tag, branch.is_merged)
+                (branch.target, branch.is_merged)
             };
             if let Some(&idx) = &indices.get(&target) {
                 let info = &mut commits[idx];
-                if is_tag {
-                    info.tags.push(old_idx);
-                } else if !is_merged {
-                    info.branches.push(old_idx);
-                }
                 let oid = info.oid;
                 let any_assigned =
                     trace_branch(repository, commits, indices, &mut branches, oid, old_idx)
@@ -252,6 +246,7 @@ pub fn assign_branches(
         }
     }
 
+    // Get rid of branches that have no commits and is merged and is not a tag
     let mut count_skipped = 0;
     for (idx, branch) in branches.iter().enumerate() {
         if let Some(mapped) = index_map[idx] {
@@ -267,12 +262,6 @@ pub fn assign_branches(
     for info in commits.iter_mut() {
         if let Some(trace) = info.branch_trace {
             info.branch_trace = index_map[trace];
-            for br in info.branches.iter_mut() {
-                *br = index_map[*br].unwrap();
-            }
-            for tag in info.tags.iter_mut() {
-                *tag = index_map[*tag].unwrap();
-            }
         }
     }
 
