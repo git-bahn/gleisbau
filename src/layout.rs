@@ -103,6 +103,7 @@ pub fn layout_track_range(
             let visual_data = create_branch_visual(
                 color_counter,
                 branch_info, 
+                track_map,
                 settings
             )?;
 
@@ -146,23 +147,33 @@ pub fn layout_track_range(
 fn create_branch_visual(
     idx: usize,
     branch: &BranchInfo,
+    track_map: &TrackMap, // Now we pass the map to look up other branches
     settings: &Settings,
 ) -> Result<BranchVis, String> {
-    // 1. Calculate Order Group (Position)
-    let order_group = branch_order(&branch.name, &settings.branches.order);
+    let mut name_to_color = &branch.name;
 
-    // 2. Calculate Terminal Color
-    let term_color_name = branch_color(
-        &branch.name,
-        &settings.branches.terminal_colors[..],
+    // The Logic from trace_branch: 
+    // If this is a remote branch, check if we should inherit a local color
+    if branch.name.starts_with(ORIGIN) {
+        let local_name = &branch.name[7..];
+        // Look for a local branch with the same name in TrackMap
+        if let Some(local_idx) = track_map.all_branches.iter().position(|b| b.name == local_name) {
+            // We can now use the local_name for color calculation 
+            name_to_color = &track_map.all_branches[local_idx].name;
+        }
+    }
+
+    let order_group = branch_order(name_to_color, &settings.branches.order);
+    let term_color_str = branch_color(
+        name_to_color,
+        &settings.branches.terminal_colors,
         &settings.branches.terminal_colors_unknown,
         idx,
     );
-    let term_color = to_terminal_color(&term_color_name)?;
+    let term_color = to_terminal_color(&term_color_str)?;
 
-    // 3. Calculate SVG Color
     let svg_color = branch_color(
-        &branch.name,
+        name_to_color,
         &settings.branches.svg_colors,
         &settings.branches.svg_colors_unknown,
         idx,
@@ -172,7 +183,6 @@ fn create_branch_visual(
         order_group,
         term_color,
         svg_color,
-        // These are handled by assign_sources_targets later
         target_order_group: None,
         source_order_group: None,
         column: None,

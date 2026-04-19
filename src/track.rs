@@ -628,7 +628,7 @@ fn extract_branches(
 
 /// Traces back branches by following 1st commit parent,
 /// until a commit is reached that already has a trace.
-fn trace_branch(
+pub fn trace_branch(
     repository: &Repository,
     commits: &mut [CommitInfo],
     indices: &HashMap<Oid, usize>,
@@ -640,25 +640,26 @@ fn trace_branch(
     let mut prev_index: Option<usize> = None;
     let mut start_index: Option<i32> = None;
     let mut any_assigned = false;
+
     while let Some(index) = indices.get(&curr_oid) {
         let info = &mut commits[*index];
+        
         if let Some(old_trace) = info.branch_trace {
-            let (old_name, old_term, old_svg, old_range) = {
+            // Compare names and ranges without touching visuals
+            let (old_name, old_range_start) = {
                 let old_branch = &branches[old_trace];
-                (
-                    &old_branch.name.clone(),
-                    old_branch.visual.term_color,
-                    old_branch.visual.svg_color.clone(),
-                    old_branch.range,
-                )
+                (old_branch.name.clone(), old_branch.range.0)
             };
+            
             let new_name = &branches[branch_index].name;
-            let old_end = old_range.0.unwrap_or(0);
-            let new_end = branches[branch_index].range.0.unwrap_or(0);
-            if new_name == old_name && old_end >= new_end {
+            let old_end_val = old_range_start.unwrap_or(0);
+            let new_end_val = branches[branch_index].range.0.unwrap_or(0);
+
+            if new_name == &old_name && old_end_val >= new_end_val {
+                // Branch continuation logic
                 let old_branch = &mut branches[old_trace];
-                if let Some(old_end) = old_range.1 {
-                    if index > &old_end {
+                if let Some(old_limit) = old_branch.range.1 {
+                    if index > &old_limit {
                         old_branch.range = (None, None);
                     } else {
                         old_branch.range = (Some(*index), old_branch.range.1);
@@ -667,23 +668,16 @@ fn trace_branch(
                     old_branch.range = (Some(*index), old_branch.range.1);
                 }
             } else {
-                let branch = &mut branches[branch_index];
-                if branch.name.starts_with(ORIGIN) && branch.name[7..] == old_name[..] {
-                    branch.visual.term_color = old_term;
-                    branch.visual.svg_color = old_svg;
-                }
+                // Determine the start_index for the branch visual range
                 match prev_index {
                     None => start_index = Some(*index as i32 - 1),
-                    Some(prev_index) => {
-                        // TODO: in cases where no crossings occur, the rule for merge commits can also be applied to normal commits
-                        // see also print::get_deviate_index()
-                        if commits[prev_index].is_merge {
-                            let mut temp_index = prev_index;
+                    Some(p_idx) => {
+                        if commits[p_idx].is_merge {
+                            let mut temp_index = p_idx;
                             for sibling_oid in &commits[*index].children {
                                 if sibling_oid != &curr_oid {
-                                    let sibling_index = indices[sibling_oid];
-                                    if sibling_index > temp_index {
-                                        temp_index = sibling_index;
+                                    if let Some(&sib_idx) = indices.get(sibling_oid) {
+                                        if sib_idx > temp_index { temp_index = sib_idx; }
                                     }
                                 }
                             }
@@ -702,23 +696,27 @@ fn trace_branch(
 
         let commit = repository.find_commit(curr_oid)?;
         if commit.parent_count() == 0 {
-            // If no parents, this is the root commit, set `start_index` and break.
             start_index = Some(*index as i32);
             break;
         }
-        // Set `prev_index` to the current commit's index and move to the first parent.
         prev_index = Some(*index);
         curr_oid = commit.parent_id(0)?;
     }
 
+    // Finalize the range for this branch
     let branch = &mut branches[branch_index];
+    finalize_branch_range(branch, start_index);
+    
+    Ok(any_assigned)
+}
+
+fn finalize_branch_range(branch: &mut BranchInfo, start_index: Option<i32>) {
     if let Some(end) = branch.range.0 {
-        if let Some(start_index) = start_index {
-            if start_index < end as i32 {
-                // TODO: find a better solution (bool field?) to identify non-deleted branches that were not assigned to any commits, and thus should not occupy a column.
+        if let Some(si) = start_index {
+            if si < end as i32 {
                 branch.range = (None, None);
             } else {
-                branch.range = (branch.range.0, Some(start_index as usize));
+                branch.range = (branch.range.0, Some(si as usize));
             }
         } else {
             branch.range = (branch.range.0, None);
@@ -726,7 +724,6 @@ fn trace_branch(
     } else {
         branch.range = (branch.range.0, start_index.map(|si| si as usize));
     }
-    Ok(any_assigned)
 }
 
 /// Sorts branches into columns for visualization, that all branches can be
