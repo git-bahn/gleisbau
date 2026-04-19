@@ -8,8 +8,14 @@ e.g. with tags and branch labels, should be done during printing.
 use std::collections::HashMap;
 use std::ops::Range;
 
+use regex::Regex;
+
+use crate::print::colors::to_terminal_color;
+use crate::settings::Settings;
 use crate::track::BranchInfo;
 use crate::track::TrackMap;
+
+const ORIGIN: &str = "origin/";
 
 
 // These functions in track.rs contains references to BranchVis
@@ -63,13 +69,13 @@ impl BranchVis {
 /// Generates a TrackLayout by extracting and calculating visual data for 
 /// branches active within a specific commit range.
 pub fn layout_track_range(
-    track_map: &TrackMap, 
-    range: Range<usize>
-) -> TrackLayout {
+    track_map: &TrackMap,
+    range: Range<usize>,
+    settings: &Settings, // Settings now passed here instead of track.rs
+) -> Result<TrackLayout, String> {
     let mut branch_visuals = Vec::new();
     let mut track_visual_map = HashMap::new();
 
-    // Iterate through the requested commit range
     for i in range.clone() {
         // Find track assigned to commit
         let commit = &track_map.commits[i];
@@ -87,34 +93,83 @@ pub fn layout_track_range(
         if !track_visual_map.contains_key(&b_idx) {
             let branch_info = &track_map.all_branches[b_idx];
             
-            // Logic to calculate colors/columns
-            let visual_data = create_branch_visual(branch_info);
+            // This now respects the "FORK" prefix added in track.rs
+            let visual_data = create_branch_visual(b_idx, branch_info, settings)?;
 
-            // Store the visual data and map it
             let vis_idx = branch_visuals.len();
             branch_visuals.push(visual_data);
             track_visual_map.insert(b_idx, vis_idx);
         }
-
-        // Note: You can now easily store per-commit geometry here if needed,
-        // since you have the current commit index 'i' and its branch visual index.
     }
 
-    TrackLayout {
+    // After initial creation, we can run visual-only passes
+    // (Similar to assign_sources_targets but updating branch_visuals)
+    
+    Ok(TrackLayout {
         source: range,
         track_visual: track_visual_map,
         branch_visual: branch_visuals,
-    }
+    })
 }
 
-fn create_branch_visual(_branch: &BranchInfo) -> BranchVis {
-    todo!("Implement function");
-    BranchVis {
-        order_group: 0,
-        term_color: 0,
-        svg_color: String::new(),
+fn create_branch_visual(
+    idx: usize,
+    branch: &BranchInfo,
+    settings: &Settings,
+) -> Result<BranchVis, String> {
+    // 1. Calculate Order Group (Position)
+    let order_group = branch_order(&branch.name, &settings.branches.order);
+
+    // 2. Calculate Terminal Color
+    let term_color_name = branch_color(
+        &branch.name,
+        &settings.branches.terminal_colors[..],
+        &settings.branches.terminal_colors_unknown,
+        idx,
+    );
+    let term_color = to_terminal_color(&term_color_name)?;
+
+    // 3. Calculate SVG Color
+    let svg_color = branch_color(
+        &branch.name,
+        &settings.branches.svg_colors,
+        &settings.branches.svg_colors_unknown,
+        idx,
+    );
+
+    Ok(BranchVis {
+        order_group,
+        term_color,
+        svg_color,
+        // These are handled by assign_sources_targets later
         target_order_group: None,
         source_order_group: None,
         column: None,
+    })
+}
+
+/// Finds the index for a branch name from a slice of prefixes
+fn branch_order(name: &str, order: &[Regex]) -> usize {
+    order
+        .iter()
+        .position(|b| (name.starts_with(ORIGIN) && b.is_match(&name[7..])) || b.is_match(name))
+        .unwrap_or(order.len())
+}
+
+/// Finds the svg color for a branch name.
+fn branch_color<T: Clone>(
+    name: &str,
+    order: &[(Regex, Vec<T>)],
+    unknown: &[T],
+    counter: usize,
+) -> T {
+    let stripped_name = name.strip_prefix(ORIGIN).unwrap_or(name);
+
+    for (regex, colors) in order {
+        if regex.is_match(stripped_name) {
+            return colors[counter % colors.len()].clone();
+        }
     }
+
+    unknown[counter % unknown.len()].clone()
 }

@@ -147,7 +147,7 @@ impl GitGraph {
         track::assign_children(&mut commits, &indices);
 
         let mut all_branches = track::assign_branches(&repository, &mut commits, &indices, settings)?;
-        track::correct_fork_merges(&commits, &indices, &mut all_branches, settings)?;
+        track::correct_fork_merges(&commits, &indices, &mut all_branches)?;
         track::assign_sources_targets(&commits, &indices, &mut all_branches);
 
         let (shortest_first, forward) = match settings.branch_order {
