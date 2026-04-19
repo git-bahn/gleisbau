@@ -42,10 +42,19 @@ I need to split GitGraph data to get a different coupling.
 This will be done so legacy code can still use GitGraph with only some
 API changes.
 
-Reverse the link between BranchInfo and BranchViz.
-BranchInfo will be built when traversing the graph, and must not know
-anything visualization.
-BranchViz will be built repeatedly when rendering, from BranchInfo.
+Some are purely related to decoration, like a list of tags, branches for
+a commit, as well as information about which commit is the current head.
+In git-graph and git-igitt this was achieved via access to internal
+structures in GitGraph. A similar set of data will be provided via
+migration fuctions on GitGraph.
+
+The new process must be able to produce topology data without any geometry
+or presentation data. The first refactoring is to 
+reverse the link between BranchInfo and BranchViz.
+
+- BranchInfo will be built when traversing the graph, and must not know
+  anything about visualization.
+- BranchViz will be built repeatedly when rendering, from BranchInfo.
 
 ## AS-IS
 
@@ -57,3 +66,4 @@ GitGraph --> BranchInfo --> BranchVis
 TrackMap --> BranchInfo
 GitGraph --> TrackMap
 GitGraph --> BranchVis
+GitGraph --> LabelMap

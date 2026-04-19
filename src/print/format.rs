@@ -1,4 +1,4 @@
-//! Formatting of commits.
+//! Formatting of commits for usage with an ANSI color terminal
 
 use chrono::{FixedOffset, Local, TimeZone};
 use git2::{Commit, Time};

@@ -31,6 +31,13 @@ pub struct TrackLayout {
     branch_visual: Vec<BranchVis>,
 }
 
+impl TrackLayout {
+    pub fn track_visual(&self, track_inx: usize) -> Option<&BranchVis> {
+        self.track_visual.get(&track_inx)
+        .and_then(|&bv_idx| self.branch_visual.get(bv_idx))
+    }
+}
+
 /// Branch properties for visualization.
 pub struct BranchVis {
     /// The branch's column group (left to right)

@@ -14,6 +14,8 @@ use yansi::Paint;
 use crate::graph::{BranchInfo, CommitInfo, GitGraph, HeadInfo};
 use crate::layout::TrackLayout;
 use crate::print::format::CommitFormat;
+use crate::print::label::LabelMap;
+use crate::print::label::LabelType;
 use crate::settings::{Characters, Settings};
 use crate::track::TrackMap;
 
@@ -35,9 +37,10 @@ const HOR_D: u8 = 13;
 const ARR_L: u8 = 14;
 const ARR_R: u8 = 15;
 
-const WHITE: u8 = 7;
-const HEAD_COLOR: u8 = 14;
-const HASH_COLOR: u8 = 11;
+// Color index used by yansi
+const WHITE: u8 = 7; // Normal white
+const HEAD_COLOR: u8 = 14; // Bright cyan
+const HASH_COLOR: u8 = 11; // Bright yellow
 
 /**
 UnicodeGraphInfo is a type alias for a tuple containing three elements:
@@ -794,13 +797,14 @@ pub fn format_branches(
     tracks: &TrackMap,
     layout: &TrackLayout,
     info: &CommitInfo,
+    labels: &LabelMap,
     head: Option<&HeadInfo>,
     color: bool,
 ) -> String {
     let curr_color = info
         .branch_trace
-        .map(|branch_idx| &layout.track_visual[branch_idx])
-        .map(|branch_visual_idx| &layout.branch_visual[branch_visual_idx].term_color);
+        .map(|branch_idx| &layout.track_visual(branch_idx))
+        .and_then(|visual| visual.term_color);
 
     let mut branch_str = String::new();
 
@@ -816,10 +820,19 @@ pub fn format_branches(
         }
     }
 
-    if !info.branches.is_empty() {
+    let commit_branches: Vec<_> = labels.get_labels(info.oid)
+        .into_iter()
+        .flatten()
+        .filter(|label| label.kind == LabelType::LocalBranch
+                     || label.kind == LabelType::RemoteBranch)
+        .map(|&label| label.clone())
+        .collect();
+    
+    if !commit.branches.is_empty() {
         write!(branch_str, " (").unwrap();
 
-        let branches = info.branches.iter().sorted_by_key(|br| {
+        // move head branch up front
+        let branches = commit_branches.iter().sorted_by_key(|br| {
             if let Some(head) = head {
                 head.name != tracks.all_branches[**br].name
             } else {
@@ -849,16 +862,21 @@ pub fn format_branches(
             }
             .unwrap();
 
-            if idx < info.branches.len() - 1 {
+            if idx < commit_branches.len() - 1 {
                 write!(branch_str, ", ").unwrap();
             }
         }
         write!(branch_str, ")").unwrap();
     }
 
-    if !info.tags.is_empty() {
+    let commit_tags: Vec<_> = labels.get_labels(&info.oid)
+        .into_iter()
+        .flatten()
+        .filter(|label| label.kind == LabelType::Tag)
+        .collect();
+    if !commit_tags.is_empty() {
         write!(branch_str, " [").unwrap();
-        for (idx, tag_index) in info.tags.iter().enumerate() {
+        for (idx, tag_index) in commit_tags.iter().enumerate() {
             let tag = &tracks.all_branches[*tag_index];
             let tag_color = curr_color.unwrap_or(&tag.visual.term_color);
 
@@ -870,7 +888,7 @@ pub fn format_branches(
             }
             .unwrap();
 
-            if idx < info.tags.len() - 1 {
+            if idx < commit_tags.len() - 1 {
                 write!(branch_str, ", ").unwrap();
             }
         }
