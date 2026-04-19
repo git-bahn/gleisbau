@@ -807,16 +807,19 @@ pub fn format_branches(
         .and_then(|visual| visual.term_color);
 
     let mut branch_str = String::new();
+    fn append_str_col(target: &mut String, s: &str, color: bool, s_col: u8) {
+        if color {
+            write!(target, "{}", s.fixed(s_col)).unwrap();
+        } else {
+            write!(target, "{}", s).unwrap();
+        }
+    }
 
     let head_str = "HEAD ->";
     if let Some(head) = head {
         if !head.is_branch {
-            if color {
-                write!(branch_str, " {}", head_str.fixed(HEAD_COLOR))
-            } else {
-                write!(branch_str, " {}", head_str)
-            }
-            .unwrap();
+            branch_str.push_str(" ");
+            append_str_col(&mut branch_str, head_str, color, HEAD_COLOR);
         }
     }
 
@@ -828,8 +831,8 @@ pub fn format_branches(
         .map(|&label| label.clone())
         .collect();
     
-    if !commit.branches.is_empty() {
-        write!(branch_str, " (").unwrap();
+    if !commit_branches.is_empty() {
+        branch_str.push_str(" (");
 
         // move head branch up front
         let branches = commit_branches.iter().sorted_by_key(|br| {
@@ -846,27 +849,18 @@ pub fn format_branches(
 
             if let Some(head) = head {
                 if idx == 0 && head.is_branch {
-                    if color {
-                        write!(branch_str, "{} ", head_str.fixed(14))
-                    } else {
-                        write!(branch_str, "{} ", head_str)
-                    }
-                    .unwrap();
+                    append_str_col(&mut branch_str, head_str, color, HEAD_COLOR);
+                    branch_str.push_str(" ");
                 }
             }
 
-            if color {
-                write!(branch_str, "{}", &branch.name.fixed(branch_color))
-            } else {
-                write!(branch_str, "{}", &branch.name)
-            }
-            .unwrap();
+            append_str_col(&mut branch_str, &label.name, color, branch_color);
 
             if idx < commit_branches.len() - 1 {
-                write!(branch_str, ", ").unwrap();
+                branch_str.push_str(", ");
             }
         }
-        write!(branch_str, ")").unwrap();
+        branch_str.push_str(")");
     }
 
     let commit_tags: Vec<_> = labels.get_labels(&info.oid)
@@ -875,24 +869,21 @@ pub fn format_branches(
         .filter(|label| label.kind == LabelType::Tag)
         .collect();
     if !commit_tags.is_empty() {
-        write!(branch_str, " [").unwrap();
-        for (idx, tag_index) in commit_tags.iter().enumerate() {
+        branch_str.push_str(" [");
+        for (idx, tag_label) in commit_tags.iter().enumerate() {
+            /* TODO find tag color
             let tag = &tracks.all_branches[*tag_index];
             let tag_color = curr_color.unwrap_or(&tag.visual.term_color);
 
             let tag_name = &tag.name[5..];
-            if color {
-                write!(branch_str, "{}", tag_name.fixed(*tag_color))
-            } else {
-                write!(branch_str, "{}", tag_name)
-            }
-            .unwrap();
+            */let tag_color = WHITE;
+            append_str_col(&mut branch_str, &tag_label.name, color, tag_color);
 
             if idx < commit_tags.len() - 1 {
-                write!(branch_str, ", ").unwrap();
+                branch_str.push_str(", ");
             }
         }
-        write!(branch_str, "]").unwrap();
+        branch_str.push_str("]");
     }
 
     branch_str
