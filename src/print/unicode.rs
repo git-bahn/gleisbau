@@ -12,6 +12,7 @@ use textwrap::Options;
 use yansi::Paint;
 
 use crate::graph::{BranchInfo, CommitInfo, GitGraph, HeadInfo};
+use crate::layout::TrackLayout;
 use crate::print::format::CommitFormat;
 use crate::settings::{Characters, Settings};
 use crate::track::TrackMap;
@@ -791,13 +792,15 @@ fn format(
 /// Format branches and tags.
 pub fn format_branches(
     tracks: &TrackMap,
+    layout: &TrackLayout,
     info: &CommitInfo,
     head: Option<&HeadInfo>,
     color: bool,
 ) -> String {
     let curr_color = info
         .branch_trace
-        .map(|branch_idx| &tracks.all_branches[branch_idx].visual.term_color);
+        .map(|branch_idx| &layout.track_visual[branch_idx])
+        .map(|branch_visual_idx| &layout.branch_visual[branch_visual_idx].term_color);
 
     let mut branch_str = String::new();
 
