@@ -14,7 +14,7 @@ use git2::Repository;
 use regex::Regex;
 
 use crate::print::colors::to_terminal_color;
-use crate::settings::{BranchSettings, MergePatterns, Settings};
+use crate::settings::{MergePatterns, Settings};
 use crate::layout::BranchVis;
 
 const ORIGIN: &str = "origin/";
@@ -723,124 +723,6 @@ fn finalize_branch_range(branch: &mut BranchInfo, start_index: Option<i32>) {
         }
     } else {
         branch.range = (branch.range.0, start_index.map(|si| si as usize));
-    }
-}
-
-/// Sorts branches into columns for visualization, that all branches can be
-/// visualizes linearly and without overlaps. Uses Shortest-First scheduling.
-pub fn assign_branch_columns(
-    commits: &[CommitInfo],
-    indices: &HashMap<Oid, usize>,
-    branches: &mut [BranchInfo],
-    settings: &BranchSettings,
-    shortest_first: bool,
-    forward: bool,
-) {
-    let mut occupied: Vec<Vec<Vec<(usize, usize)>>> = vec![vec![]; settings.order.len() + 1];
-
-    let length_sort_factor = if shortest_first { 1 } else { -1 };
-    let start_sort_factor = if forward { 1 } else { -1 };
-
-    let mut branches_sort: Vec<_> = branches
-        .iter()
-        .enumerate()
-        .filter(|(_idx, br)| br.range.0.is_some() || br.range.1.is_some())
-        .map(|(idx, br)| {
-            (
-                idx,
-                br.range.0.unwrap_or(0),
-                br.range.1.unwrap_or(branches.len() - 1),
-                br.visual
-                    .source_order_group
-                    .unwrap_or(settings.order.len() + 1),
-                br.visual
-                    .target_order_group
-                    .unwrap_or(settings.order.len() + 1),
-            )
-        })
-        .collect();
-
-    branches_sort.sort_by_cached_key(|tup| {
-        (
-            std::cmp::max(tup.3, tup.4),
-            (tup.2 as i32 - tup.1 as i32) * length_sort_factor,
-            tup.1 as i32 * start_sort_factor,
-        )
-    });
-
-    for (branch_idx, start, end, _, _) in branches_sort {
-        let branch = &branches[branch_idx];
-        let group = branch.visual.order_group;
-        let group_occ = &mut occupied[group];
-
-        let align_right = branch
-            .source_branch
-            .map(|src| branches[src].visual.order_group > branch.visual.order_group)
-            .unwrap_or(false)
-            || branch
-                .target_branch
-                .map(|trg| branches[trg].visual.order_group > branch.visual.order_group)
-                .unwrap_or(false);
-
-        let len = group_occ.len();
-        let mut found = len;
-        for i in 0..len {
-            let index = if align_right { len - i - 1 } else { i };
-            let column_occ = &group_occ[index];
-            let mut occ = false;
-            for (s, e) in column_occ {
-                if start <= *e && end >= *s {
-                    occ = true;
-                    break;
-                }
-            }
-            if !occ {
-                if let Some(merge_trace) = branch
-                    .merge_target
-                    .and_then(|t| indices.get(&t))
-                    .and_then(|t_idx| commits[*t_idx].branch_trace)
-                {
-                    let merge_branch = &branches[merge_trace];
-                    if merge_branch.visual.order_group == branch.visual.order_group {
-                        if let Some(merge_column) = merge_branch.visual.column {
-                            if merge_column == index {
-                                occ = true;
-                            }
-                        }
-                    }
-                }
-            }
-            if !occ {
-                found = index;
-                break;
-            }
-        }
-
-        let branch = &mut branches[branch_idx];
-        branch.visual.column = Some(found);
-        if found == group_occ.len() {
-            group_occ.push(vec![]);
-        }
-        group_occ[found].push((start, end));
-    }
-
-    // Compute start column of each group
-    let mut group_offset: Vec<usize> = vec![];
-    let mut acc = 0;
-    for group in occupied {
-        group_offset.push(acc);
-        acc += group.len();
-    }
-
-    // Compute branch column. Up till now we have computed the branch group
-    // and the column offset within that group. This was to make it easy to
-    // insert columns between groups. Now it is time to convert offset relative
-    // to the group the final column.
-    for branch in branches {
-        if let Some(column) = branch.visual.column {
-            let offset = group_offset[branch.visual.order_group];
-            branch.visual.column = Some(column + offset);
-        }
     }
 }
 

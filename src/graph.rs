@@ -17,6 +17,7 @@
 //! commit. Horizontal lines represent forks (multiple children) or
 //! merges (multiple parents), and show the remaining parent relations.
 
+use crate::layout;
 use crate::track;
 use crate::settings::{BranchOrder, Settings};
 pub use git2::{BranchType, Commit, Error, Oid, Reference, Repository};
@@ -155,7 +156,8 @@ impl GitGraph {
             BranchOrder::LongestFirst(fwd) => (false, fwd),
         };
 
-        track::assign_branch_columns(
+        layout::assign_branch_columns(
+            &track_map,
             &commits,
             &indices,
             &mut all_branches,
