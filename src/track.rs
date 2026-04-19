@@ -322,57 +322,25 @@ pub fn assign_sources_targets(
     indices: &HashMap<Oid, usize>,
     branches: &mut [BranchInfo],
 ) {
+    // 1. Identify Target Branches (where does this branch merge INTO?)
     for idx in 0..branches.len() {
-        let target_branch_idx = branches[idx]
+        branches[idx].target_branch = branches[idx]
             .merge_target
             .and_then(|oid| indices.get(&oid))
             .and_then(|idx| commits.get(*idx))
             .and_then(|info| info.branch_trace);
-
-        branches[idx].target_branch = target_branch_idx;
-
-        let group = target_branch_idx
-            .and_then(|trace| branches.get(trace))
-            .map(|br| br.visual.order_group);
-
-        branches[idx].visual.target_order_group = group;
     }
-    for info in commits {
-        let mut max_par_order = None;
-        let mut source_branch_id = None;
-        for par_oid in info.parents.iter() {
-            let par_info = par_oid
-                .and_then(|oid| indices.get(&oid))
-                .and_then(|idx| commits.get(*idx));
-            if let Some(par_info) = par_info {
-                if par_info.branch_trace != info.branch_trace {
-                    if let Some(trace) = par_info.branch_trace {
-                        source_branch_id = Some(trace);
-                    }
 
-                    let group = par_info
-                        .branch_trace
-                        .and_then(|trace| branches.get(trace))
-                        .map(|br| br.visual.order_group);
-                    if let Some(gr) = max_par_order {
-                        if let Some(p_group) = group {
-                            if p_group > gr {
-                                max_par_order = group;
-                            }
-                        }
-                    } else {
-                        max_par_order = group;
+    // 2. Identify Source Branches (where did this branch fork FROM?)
+    for info in commits {
+        for par_oid in info.parents.iter().flatten() {
+            if let Some(par_info) = indices.get(par_oid).and_then(|&i| commits.get(i)) {
+                // If the parent is on a different branch trace, that's our source
+                if par_info.branch_trace != info.branch_trace {
+                    if let (Some(this_b_idx), Some(src_b_idx)) = (info.branch_trace, par_info.branch_trace) {
+                        branches[this_b_idx].source_branch = Some(src_b_idx);
                     }
                 }
-            }
-        }
-        let branch = info.branch_trace.and_then(|trace| branches.get_mut(trace));
-        if let Some(branch) = branch {
-            if let Some(order) = max_par_order {
-                branch.visual.source_order_group = Some(order);
-            }
-            if let Some(source_id) = source_branch_id {
-                branch.source_branch = Some(source_id);
             }
         }
     }

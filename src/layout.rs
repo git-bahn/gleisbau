@@ -71,11 +71,12 @@ impl BranchVis {
 pub fn layout_track_range(
     track_map: &TrackMap,
     range: Range<usize>,
-    settings: &Settings, // Settings now passed here instead of track.rs
+    settings: &Settings,
 ) -> Result<TrackLayout, String> {
     let mut branch_visuals = Vec::new();
     let mut track_visual_map = HashMap::new();
 
+    // --- Pass 1: Create initial BranchVis (Colors and Order Groups) ---
     for i in range.clone() {
         // Find track assigned to commit
         let commit = &track_map.commits[i];
@@ -92,19 +93,37 @@ pub fn layout_track_range(
         // If the track does not yet have a visualization, create it
         if !track_visual_map.contains_key(&b_idx) {
             let branch_info = &track_map.all_branches[b_idx];
-            
-            // This now respects the "FORK" prefix added in track.rs
-            let visual_data = create_branch_visual(b_idx, branch_info, settings)?;
-
             let vis_idx = branch_visuals.len();
-            branch_visuals.push(visual_data);
+            
+            branch_visuals.push(create_branch_visual(b_idx, branch_info, settings)?);
             track_visual_map.insert(b_idx, vis_idx);
         }
     }
 
-    // After initial creation, we can run visual-only passes
-    // (Similar to assign_sources_targets but updating branch_visuals)
-    
+    // --- Pass 2: Connect Visual Groups (Target/Source Order Groups) ---
+    // We iterate through the visuals we just created
+    for (b_idx, &vis_idx) in track_visual_map.iter() {
+        let branch = &track_map.all_branches[*b_idx];
+        
+        // Resolve Target Order Group
+        if let Some(target_idx) = branch.target_branch {
+            // Check if the target branch has a visual in our current layout
+            if let Some(&target_vis_idx) = track_visual_map.get(&target_idx) {
+                let target_order = branch_visuals[target_vis_idx].order_group;
+                branch_visuals[vis_idx].target_order_group = Some(target_order);
+            }
+        }
+
+        // Resolve Source Order Group
+        if let Some(source_idx) = branch.source_branch {
+            // Check if the source branch has a visual in our current layout
+            if let Some(&source_vis_idx) = track_visual_map.get(&source_idx) {
+                let source_order = branch_visuals[source_vis_idx].order_group;
+                branch_visuals[vis_idx].source_order_group = Some(source_order);
+            }
+        }
+    }
+
     Ok(TrackLayout {
         source: range,
         track_visual: track_visual_map,
