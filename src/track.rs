@@ -350,14 +350,13 @@ pub fn assign_sources_targets(
 ///
 /// This function iterates through the branches found in the Git repository,
 /// filters them based on the `include_remote` setting, and constructs `BranchInfo`
-/// objects for each valid branch. It assigns properties like name, type (local/remote),
-/// visual order, and colors based on the provided settings.
+/// objects for each valid branch. It assigns properties like name, type (local/remote)
+/// based on the provided settings.
 ///
 /// Arguments:
 /// - `repository`: A reference to the Git `Repository` object.
 /// - `indices`: A HashMap mapping commit OIDs to their corresponding indices in the `commits` list.
 /// - `settings`: A reference to the application `Settings` containing branch configuration.
-/// - `counter`: A mutable reference to a counter, incremented for each processed branch to aid in color assignment.
 ///
 /// Returns:
 /// A `Result` containing a `Vec<BranchInfo>` on success, or a `String` error message on failure.
@@ -365,7 +364,6 @@ fn extract_actual_branches(
     repository: &Repository,
     indices: &HashMap<Oid, usize>,
     settings: &Settings,
-    counter: &mut usize,
 ) -> Result<Vec<BranchInfo>, String> {
     // Determine if remote branches should be included based on settings.
     let filter = if settings.include_remote {
@@ -385,56 +383,34 @@ fn extract_actual_branches(
     let valid_branches = actual_branches
         .iter()
         .filter_map(|(br, tp)| {
-            br.get().name().and_then(|n| {
-                br.get().target().map(|t| {
-                    *counter += 1; // Increment counter for unique branch identification/coloring.
+            let reference = br.get();
+            let name_full = reference.name()?;
+            let target_oid = reference.target()?;
 
-                    // Determine the starting index for slicing the branch name string.
-                    let start_index = match tp {
-                        BranchType::Local => 11,  // "refs/heads/"
-                        BranchType::Remote => 13, // "refs/remotes/"
-                    };
-                    let name = &n[start_index..];
-                    let end_index = indices.get(&t).cloned();
+            // Strip prefix: "refs/heads/" (11) or "refs/remotes/" (13)
+            let start_index = match tp {
+                BranchType::Local => 11,
+                BranchType::Remote => 13,
+            };
+            let name = name_full.get(start_index..).unwrap_or(name_full);
+            let commit_idx = indices.get(&target_oid).cloned();
 
-                    // Convert branch color to a terminal-compatible format.
-                    let term_color = match to_terminal_color(
-                        &branch_color(
-                            name,
-                            &settings.branches.terminal_colors[..],
-                            &settings.branches.terminal_colors_unknown,
-                            *counter,
-                        )[..],
-                    ) {
-                        Ok(col) => col,
-                        Err(err) => return Err(err), // Propagate color conversion errors.
-                    };
+            let persistence = branch_order(name, &settings.branches.persistence) as u8;
 
-                    // Create and return the BranchInfo object.
-                    Ok(BranchInfo::new(
-                        t,
-                        None, // No merge OID for actual branches.
-                        name.to_string(),
-                        branch_order(name, &settings.branches.persistence) as u8,
-                        &BranchType::Remote == tp, // Check if it's a remote branch.
-                        false,                     // Not a derived merge branch.
-                        false,                     // Not a tag.
-                        BranchVis::new(
-                            branch_order(name, &settings.branches.order),
-                            term_color,
-                            branch_color(
-                                name,
-                                &settings.branches.svg_colors,
-                                &settings.branches.svg_colors_unknown,
-                                *counter,
-                            ),
-                        ),
-                        end_index,
-                    ))
-                })
+            Some(BranchInfo {
+                target: target_oid,
+                merge_target: None,
+                source_branch: None,
+                target_branch: None,
+                name: name.to_string(),
+                persistence,
+                is_remote: &BranchType::Remote == tp,
+                is_merged: false,
+                is_tag: false,
+                range: (None, commit_idx), // Start is unknown yet, end is the branch head
             })
         })
-        .collect::<Result<Vec<_>, String>>()?; // Collect results, propagating any errors.
+        .collect();
 
     Ok(valid_branches)
 }
@@ -632,7 +608,7 @@ fn extract_branches(
     let mut all_branches: Vec<BranchInfo> = Vec::new();
 
     // 1. Extract actual local and remote branches.
-    let actual_branches = extract_actual_branches(repository, indices, settings, &mut counter)?;
+    let actual_branches = extract_actual_branches(repository, indices, settings)?;
     all_branches.extend(actual_branches);
 
     // 2. Extract branches derived from merge commit summaries.

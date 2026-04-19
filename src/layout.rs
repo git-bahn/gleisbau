@@ -75,6 +75,9 @@ pub fn layout_track_range(
 ) -> Result<TrackLayout, String> {
     let mut branch_visuals = Vec::new();
     let mut track_visual_map = HashMap::new();
+    
+    // Counter for color rotation moved here
+    let mut color_counter = 0;
 
     // --- Pass 1: Create initial BranchVis (Colors and Order Groups) ---
     for i in range.clone() {
@@ -93,9 +96,18 @@ pub fn layout_track_range(
         // If the track does not yet have a visualization, create it
         if !track_visual_map.contains_key(&b_idx) {
             let branch_info = &track_map.all_branches[b_idx];
-            let vis_idx = branch_visuals.len();
             
-            branch_visuals.push(create_branch_visual(b_idx, branch_info, settings)?);
+            // We increment the counter only when a new visual is needed
+            color_counter += 1;
+
+            let visual_data = create_branch_visual(
+                color_counter,
+                branch_info, 
+                settings
+            )?;
+
+            let vis_idx = branch_visuals.len();
+            branch_visuals.push(visual_data);
             track_visual_map.insert(b_idx, vis_idx);
         }
     }
