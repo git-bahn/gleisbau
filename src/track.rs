@@ -13,9 +13,7 @@ use git2::Oid;
 use git2::Repository;
 use regex::Regex;
 
-use crate::print::colors::to_terminal_color;
 use crate::settings::{MergePatterns, Settings};
-use crate::layout::BranchVis;
 
 const ORIGIN: &str = "origin/";
 const FORK: &str = "fork/";
@@ -50,7 +48,6 @@ pub struct BranchInfo {
     pub is_merged: bool,
     /// Is branch a tag reference
     pub is_tag: bool,
-    pub visual: BranchVis,
     pub range: (Option<usize>, Option<usize>),
 }
 impl BranchInfo {
@@ -63,7 +60,6 @@ impl BranchInfo {
         is_remote: bool,
         is_merged: bool,
         is_tag: bool,
-        visual: BranchVis,
         end_index: Option<usize>,
     ) -> Self {
         BranchInfo {
@@ -76,7 +72,6 @@ impl BranchInfo {
             is_remote,
             is_merged,
             is_tag,
-            visual,
             range: (end_index, None),
         }
     }
@@ -448,7 +443,6 @@ fn extract_merge_branches(
 
             // Attempt to get the commit summary.
             if let Some(summary) = commit.summary() {
-                *counter += 1; // Increment counter for unique branch identification/coloring.
 
                 let parent_oid = commit
                     .parent_id(1)
@@ -460,23 +454,6 @@ fn extract_merge_branches(
 
                 // Determine persistence and order for the derived branch.
                 let persistence = branch_order(&branch_name, &settings.branches.persistence) as u8;
-                let pos = branch_order(&branch_name, &settings.branches.order);
-
-                // Get terminal and SVG colors for the branch.
-                let term_col = to_terminal_color(
-                    &branch_color(
-                        &branch_name,
-                        &settings.branches.terminal_colors[..],
-                        &settings.branches.terminal_colors_unknown,
-                        *counter,
-                    )[..],
-                )?;
-                let svg_col = branch_color(
-                    &branch_name,
-                    &settings.branches.svg_colors,
-                    &settings.branches.svg_colors_unknown,
-                    *counter,
-                );
 
                 // Create and add the BranchInfo for the derived merge branch.
                 let branch_info = BranchInfo::new(
@@ -487,7 +464,6 @@ fn extract_merge_branches(
                     false, // Not a remote branch.
                     true,  // This is a derived merge branch.
                     false, // Not a tag.
-                    BranchVis::new(pos, term_col, svg_col),
                     Some(idx + 1), // End index typically points to the commit after the merge.
                 );
                 merge_branches.push(branch_info);
@@ -542,24 +518,6 @@ fn extract_tags_as_branches(
         if let Ok(target_oid) = target {
             // If the target commit is within our processed commits, create a BranchInfo.
             if let Some(target_index) = indices.get(&target_oid) {
-                *counter += 1; // Increment counter for unique tag identification/coloring.
-
-                // Get terminal and SVG colors for the tag.
-                let term_col = to_terminal_color(
-                    &branch_color(
-                        name,
-                        &settings.branches.terminal_colors[..],
-                        &settings.branches.terminal_colors_unknown,
-                        *counter,
-                    )[..],
-                )?;
-                let pos = branch_order(name, &settings.branches.order);
-                let svg_col = branch_color(
-                    name,
-                    &settings.branches.svg_colors,
-                    &settings.branches.svg_colors_unknown,
-                    *counter,
-                );
 
                 // Create the BranchInfo object for the tag.
                 let tag_info = BranchInfo::new(
@@ -570,7 +528,6 @@ fn extract_tags_as_branches(
                     false,                                         // Not a remote branch.
                     false,                                         // Not a derived merge branch.
                     true,                                          // This is a tag.
-                    BranchVis::new(pos, term_col, svg_col),
                     Some(*target_index),
                 );
                 tags_info.push(tag_info);
@@ -732,24 +689,6 @@ fn branch_order(name: &str, order: &[Regex]) -> usize {
         .iter()
         .position(|b| (name.starts_with(ORIGIN) && b.is_match(&name[7..])) || b.is_match(name))
         .unwrap_or(order.len())
-}
-
-/// Finds the svg color for a branch name.
-fn branch_color<T: Clone>(
-    name: &str,
-    order: &[(Regex, Vec<T>)],
-    unknown: &[T],
-    counter: usize,
-) -> T {
-    let stripped_name = name.strip_prefix(ORIGIN).unwrap_or(name);
-
-    for (regex, colors) in order {
-        if regex.is_match(stripped_name) {
-            return colors[counter % colors.len()].clone();
-        }
-    }
-
-    unknown[counter % unknown.len()].clone()
 }
 
 /// Tries to extract the name of a merged-in branch from the merge commit summary.
