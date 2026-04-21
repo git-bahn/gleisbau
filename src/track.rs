@@ -419,7 +419,6 @@ fn extract_merge_branches(
     repository: &Repository,
     commits: &[CommitInfo],
     settings: &Settings,
-    counter: &mut usize,
 ) -> Result<Vec<BranchInfo>, String> {
     let mut merge_branches = Vec::new();
 
@@ -481,7 +480,6 @@ fn extract_tags_as_branches(
     repository: &Repository,
     indices: &HashMap<Oid, usize>,
     settings: &Settings,
-    counter: &mut usize,
 ) -> Result<Vec<BranchInfo>, String> {
     let mut tags_info = Vec::new();
     let mut tags_raw = Vec::new();
@@ -550,7 +548,6 @@ fn extract_branches(
     indices: &HashMap<Oid, usize>,
     settings: &Settings,
 ) -> Result<Vec<BranchInfo>, String> {
-    let mut counter = 0; // Counter for unique branch/tag identification, especially for coloring.
     let mut all_branches: Vec<BranchInfo> = Vec::new();
 
     // 1. Extract actual local and remote branches.
@@ -558,11 +555,11 @@ fn extract_branches(
     all_branches.extend(actual_branches);
 
     // 2. Extract branches derived from merge commit summaries.
-    let merge_branches = extract_merge_branches(repository, commits, settings, &mut counter)?;
+    let merge_branches = extract_merge_branches(repository, commits, settings)?;
     all_branches.extend(merge_branches);
 
     // 3. Extract tags and treat them as branches for visualization.
-    let tags_as_branches = extract_tags_as_branches(repository, indices, settings, &mut counter)?;
+    let tags_as_branches = extract_tags_as_branches(repository, indices, settings)?;
     all_branches.extend(tags_as_branches);
 
     // Sort all collected branches and tags.
