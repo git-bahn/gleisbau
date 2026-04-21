@@ -1,45 +1,6 @@
 //! Create visual representations of git graphs.
 
-use crate::track::TrackMap;
-use std::cmp::max;
-
 pub mod colors;
 pub mod format;
 pub mod label;
 pub mod unicode;
-
-/// Find the index at which a between-branch connection
-/// has to deviate from the current branch's column.
-///
-/// Returns the last index on the current column.
-fn get_deviate_index(tracks: &TrackMap, index: usize, par_index: usize) -> usize {
-    let info = &tracks.commits[index];
-
-    let par_info = &tracks.commits[par_index];
-    let par_branch = &tracks.all_branches[par_info.branch_trace.unwrap()];
-
-    let mut min_split_idx = index;
-    for sibling_oid in &par_info.children {
-        if let Some(&sibling_index) = tracks.indices.get(sibling_oid) {
-            if let Some(sibling) = tracks.commits.get(sibling_index) {
-                if let Some(sibling_trace) = sibling.branch_trace {
-                    let sibling_branch = &tracks.all_branches[sibling_trace];
-                    if sibling_oid != &info.oid
-                        && sibling_branch.visual.column == par_branch.visual.column
-                        && sibling_index > min_split_idx
-                    {
-                        min_split_idx = sibling_index;
-                    }
-                }
-            }
-        }
-    }
-
-    // TODO: in cases where no crossings occur, the rule for merge commits can also be applied to normal commits
-    // See also branch::trace_branch()
-    if info.is_merge {
-        max(index, min_split_idx)
-    } else {
-        (par_index as i32 - 1) as usize
-    }
-}

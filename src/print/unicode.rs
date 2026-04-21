@@ -294,7 +294,7 @@ fn draw_parent_lines(
                 vline(grid, (idx_map, par_idx_map), column, color, pers);
             }
         } else {
-            let split_index = super::get_deviate_index(tracks, idx, *par_idx);
+            let split_index = get_deviate_index(tracks, idx, *par_idx);
             let split_idx_map = index_map[split_index];
             let insert_idx = find_insert_idx(&inserts[&split_index], idx, *par_idx).unwrap();
             let idx_split = split_idx_map + insert_idx;
@@ -643,7 +643,7 @@ fn get_inserts(tracks: &TrackMap, compact: bool) -> HashMap<usize, Vec<Vec<Occ>>
                         // Find the index in the `tracks.commits` list where the visual connection
                         // should deviate from the parent's line. This helps in drawing the graph
                         // correctly when branches diverge or merge.
-                        let split_index = super::get_deviate_index(tracks, idx, *par_idx);
+                        let split_index = get_deviate_index(tracks, idx, *par_idx);
                         // Access the entry in the `inserts` map for the `split_index`.
                         match inserts.entry(split_index) {
                             // If there's already an entry at this `split_index` (meaning other
@@ -729,6 +729,42 @@ fn get_inserts(tracks: &TrackMap, compact: bool) -> HashMap<usize, Vec<Vec<Occ>>
 
     // Return the map of required insertions.
     inserts
+}
+
+/// Find the index at which a between-branch connection
+/// has to deviate from the current branch's column.
+///
+/// Returns the last index on the current column.
+fn get_deviate_index(tracks: &TrackMap, index: usize, par_index: usize) -> usize {
+    let info = &tracks.commits[index];
+
+    let par_info = &tracks.commits[par_index];
+    let par_branch = &tracks.all_branches[par_info.branch_trace.unwrap()];
+
+    let mut min_split_idx = index;
+    for sibling_oid in &par_info.children {
+        if let Some(&sibling_index) = tracks.indices.get(sibling_oid) {
+            if let Some(sibling) = tracks.commits.get(sibling_index) {
+                if let Some(sibling_trace) = sibling.branch_trace {
+                    let sibling_branch = &tracks.all_branches[sibling_trace];
+                    if sibling_oid != &info.oid
+                        && sibling_branch.visual.column == par_branch.visual.column
+                        && sibling_index > min_split_idx
+                    {
+                        min_split_idx = sibling_index;
+                    }
+                }
+            }
+        }
+    }
+
+    // TODO: in cases where no crossings occur, the rule for merge commits can also be applied to normal commits
+    // See also branch::trace_branch()
+    if info.is_merge {
+        max(index, min_split_idx)
+    } else {
+        (par_index as i32 - 1) as usize
+    }
 }
 
 /// Creates the complete graph visualization, incl. formatter commits.
