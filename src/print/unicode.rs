@@ -12,12 +12,17 @@ use textwrap::Options;
 use yansi::Paint;
 
 use crate::graph::{BranchInfo, CommitInfo, GitGraph, HeadInfo};
+use crate::layout::BranchVis;
 use crate::layout::TrackLayout;
 use crate::print::format::CommitFormat;
+use crate::print::label::Label;
 use crate::print::label::LabelMap;
 use crate::print::label::LabelType;
+use crate::print::label::list_labels;
 use crate::settings::{Characters, Settings};
 use crate::track::TrackMap;
+
+// Symbols used in [Grid]
 
 const SPACE: u8 = 0;
 const DOT: u8 = 1;
@@ -38,6 +43,7 @@ const ARR_L: u8 = 14;
 const ARR_R: u8 = 15;
 
 // Color index used by yansi
+
 const WHITE: u8 = 7; // Normal white
 const HEAD_COLOR: u8 = 14; // Bright cyan
 const HASH_COLOR: u8 = 11; // Bright yellow
@@ -67,14 +73,15 @@ pub type UnicodeGraphInfo = (Vec<String>, Vec<String>, Vec<usize>);
 pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGraphInfo, String> {
     let repo = &graph.repository;
     let tracks = graph.tracks.lock().unwrap();
+    let layout = &graph.layout;
 
     if tracks.all_branches.is_empty() {
         return Ok((vec![], vec![], vec![]));
     }
 
     // 1. Calculate dimensions and inserts
-    let num_cols = calculate_graph_dimensions(&tracks);
-    let inserts = get_inserts(&tracks, settings.compact);
+    let num_cols = calculate_graph_dimensions(&graph.layout);
+    let inserts = get_inserts(&tracks, &layout, settings.compact);
 
     let (indent1, indent2) = if let Some((_, ind1, ind2)) = settings.wrapping {
         (" ".repeat(ind1.unwrap_or(0)), " ".repeat(ind2.unwrap_or(0)))
@@ -87,12 +94,12 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
 
     // 3. Compute commit text and index map
     let (mut text_lines, index_map) =
-        build_commit_lines_and_map(repo, &tracks, &graph.head, settings, &inserts, &wrap_options)?;
+        build_commit_lines_and_map(settings, repo, &tracks, &layout, &graph.head, &inserts, &wrap_options)?;
 
     // 4. Calculate total rows and initialize/draw the grid
     let total_rows = text_lines.len();
 
-    let mut grid = draw_graph_lines(&tracks, settings, num_cols, &inserts, &index_map, total_rows);
+    let mut grid = draw_graph_lines(settings, &tracks, &layout, num_cols, &inserts, &index_map, total_rows);
 
     // 5. Handle reverse order
     if settings.reverse_commit_order {
@@ -107,14 +114,14 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
 }
 
 /// Calculates the necessary column count for the graph grid.
-fn calculate_graph_dimensions(tracks: &TrackMap) -> usize {
-    2 * tracks
-        .all_branches
+fn calculate_graph_dimensions(layout: &TrackLayout) -> usize {
+    let max_column = layout
+        .track_visual_vec()
         .iter()
-        .map(|b| b.visual.column.unwrap_or(0))
+        .map(|b_visual| b_visual.column.unwrap_or(0))
         .max()
-        .unwrap_or(0)
-        + 1
+        .unwrap_or(0);
+    2 * max_column + 1
 }
 
 /// Prepares wrapping options, returning the options structure.
@@ -135,13 +142,15 @@ fn get_wrapping_options<'a>(
 
 /// Iterates through commits to compute text lines, blank line inserts, and the index map.
 fn build_commit_lines_and_map<'a>(
+    settings: &Settings,
     repository: &Repository,
     tracks: &TrackMap,
+    layout: &TrackLayout,
     the_head: &HeadInfo,
-    settings: &Settings,
     inserts: &HashMap<usize, Vec<Vec<Occ>>>,
     wrap_options: &Option<Options<'a>>,
 ) -> Result<(Vec<Option<String>>, Vec<usize>), String> {
+    let labels = list_labels(repository, settings.include_remote)?;
     let head_idx = tracks.indices.get(&the_head.oid);
 
     // Compute commit text into text_lines and add blank rows
@@ -182,6 +191,8 @@ fn build_commit_lines_and_map<'a>(
         let lines = format(
             &settings.format,
             tracks,
+            layout,
+            &labels,
             commit,
             info,
             head,
@@ -205,8 +216,9 @@ fn build_commit_lines_and_map<'a>(
 
 /// Initializes the grid and draws all commit/branch connections.
 fn draw_graph_lines(
-    tracks: &TrackMap,
     settings: &Settings,
+    tracks: &TrackMap,
+    layout: &TrackLayout,
     num_cols: usize,
     inserts: &HashMap<usize, Vec<Vec<Occ>>>,
     index_map: &[usize],
@@ -227,7 +239,9 @@ fn draw_graph_lines(
             continue;
         };
         let branch = &tracks.all_branches[trace];
-        let column = branch.visual.column.unwrap();
+        let branch_visual = layout.track_visual(trace)
+            .expect("All commits in range has precomputed visuals");
+        let column = branch_visual.column.unwrap();
         let idx_map = index_map[idx];
 
         // Draw commit point (DOT or CIRCLE)
@@ -235,29 +249,40 @@ fn draw_graph_lines(
             column * 2,
             idx_map,
             if info.is_merge { CIRCLE } else { DOT },
-            branch.visual.term_color,
+            branch_visual.term_color,
             branch.persistence,
         );
 
         // Draw parent lines from this commit
-        draw_parent_lines(tracks, branch, &mut grid, info, inserts, index_map, idx);
+        draw_parent_lines(
+            tracks,
+            layout,
+            branch,
+            branch_visual,
+            &mut grid,
+            info,
+            inserts,
+            index_map,
+            idx);
     }
     grid
 }
 
 fn draw_parent_lines(
     tracks: &TrackMap,
+    layout: &TrackLayout,
     branch: &BranchInfo,
+    branch_visual: &BranchVis,
     grid: &mut Grid,
     info: &CommitInfo,
     inserts: &HashMap<usize, Vec<Vec<Occ>>>,
     index_map: &[usize],
     idx: usize,
 ) {
-    let column = branch.visual.column.unwrap();
+    let column = branch_visual.column.unwrap();
     let idx_map = index_map[idx];
 
-    let branch_color = branch.visual.term_color;
+    let branch_color = branch_visual.term_color;
 
     for p in 0..2 {
         let parent = info.parents[p];
@@ -280,21 +305,24 @@ fn draw_parent_lines(
 
         let par_idx_map = index_map[*par_idx];
         let par_info = &tracks.commits[*par_idx];
-        let par_branch = &tracks.all_branches[par_info.branch_trace.unwrap()];
-        let par_column = par_branch.visual.column.unwrap();
+        let par_track_idx = par_info.branch_trace.unwrap();
+        let par_branch = &tracks.all_branches[par_track_idx];
+        let par_branch_visual = layout.track_visual(par_track_idx)
+            .expect("Parent must have visuals");
+        let par_column = par_branch_visual.column.unwrap();
 
         let (color, pers) = if info.is_merge {
-            (par_branch.visual.term_color, par_branch.persistence)
+            (par_branch_visual.term_color, par_branch.persistence)
         } else {
             (branch_color, branch.persistence)
         };
 
-        if branch.visual.column == par_branch.visual.column {
+        if branch_visual.column == par_branch_visual.column {
             if par_idx_map > idx_map + 1 {
                 vline(grid, (idx_map, par_idx_map), column, color, pers);
             }
         } else {
-            let split_index = get_deviate_index(tracks, idx, *par_idx);
+            let split_index = get_deviate_index(tracks, layout, idx, *par_idx);
             let split_idx_map = index_map[split_index];
             let insert_idx = find_insert_idx(&inserts[&split_index], idx, *par_idx).unwrap();
             let idx_split = split_idx_map + insert_idx;
@@ -575,7 +603,7 @@ fn update_right_cell_backward(grid: &mut Grid, index: usize, from_2: usize, colo
 /// are not direct descendants in the main commit list. These "inserts"
 //  represent the horizontal lines in the graph.
 ///
-/// # Arguments
+/// # Arguments (TODO update this)
 ///
 /// * `graph`: A reference to the `GitGraph` structure containing the
 //             commit and branch information.
@@ -591,7 +619,7 @@ fn update_right_cell_backward(grid: &mut Grid, index: usize, from_2: usize, colo
 /// `Occ` enum describes what occupies a cell in that row
 /// (either a commit or a range representing a connection).
 ///
-fn get_inserts(tracks: &TrackMap, compact: bool) -> HashMap<usize, Vec<Vec<Occ>>> {
+fn get_inserts(tracks: &TrackMap, layout: &TrackLayout, compact: bool) -> HashMap<usize, Vec<Vec<Occ>>> {
 
     // Initialize an empty HashMap to store the required insertions. The key is the commit
     // index, and the value is a vector of rows, where each row is a vector of Occupations (`Occ`).
@@ -604,10 +632,11 @@ fn get_inserts(tracks: &TrackMap, compact: bool) -> HashMap<usize, Vec<Vec<Occ>>
         // Get the visual column assigned to the branch of this commit. Unwrap is safe here
         // because `branch_trace` should always point to a valid branch with an assigned column
         // for commits that are included in the filtered graph.
-        let column = tracks.all_branches[info.branch_trace.unwrap()]
-            .visual
+        let track_inx = info.branch_trace.unwrap();
+        let column = layout.track_visual(track_inx)
+            .expect("Visuals must be present for track")
             .column
-            .unwrap();
+            .expect("Track must have a column");
 
         inserts.insert(idx, vec![vec![Occ::Commit(idx, column)]]);
     }
@@ -619,9 +648,10 @@ fn get_inserts(tracks: &TrackMap, compact: bool) -> HashMap<usize, Vec<Vec<Occ>>
         // If the commit has a branch trace (meaning it belongs to a visualized branch).
         if let Some(trace) = info.branch_trace {
             // Get the `BranchInfo` for the current commit's branch.
-            let branch = &tracks.all_branches[trace];
+            let branch_visual = layout.track_visual(trace)
+                .expect("All tracks in print range must have visuals");
             // Get the visual column of the current commit's branch. Unwrap is safe as explained above.
-            let column = branch.visual.column.unwrap();
+            let column = branch_visual.column.unwrap();
 
             // Iterate through the two possible parents of the current commit.
             for p in 0..2 {
@@ -632,8 +662,10 @@ fn get_inserts(tracks: &TrackMap, compact: bool) -> HashMap<usize, Vec<Vec<Occ>>
                 // Try to find the index of the parent commit in the `tracks.commits` vector.
                 if let Some(par_idx) = tracks.indices.get(&par_oid) {
                     let par_info = &tracks.commits[*par_idx];
-                    let par_branch = &tracks.all_branches[par_info.branch_trace.unwrap()];
-                    let par_column = par_branch.visual.column.unwrap();
+                    let par_track_idx = par_info.branch_trace.unwrap();
+                    let par_branch_visual = layout.track_visual(par_track_idx)
+                        .expect("Parent track must have visuals");
+                    let par_column = par_branch_visual.column.unwrap();
                     // Determine the sorted range of columns between the current commit and its parent.
                     let column_range = sorted(column, par_column);
 
@@ -643,7 +675,7 @@ fn get_inserts(tracks: &TrackMap, compact: bool) -> HashMap<usize, Vec<Vec<Occ>>
                         // Find the index in the `tracks.commits` list where the visual connection
                         // should deviate from the parent's line. This helps in drawing the graph
                         // correctly when branches diverge or merge.
-                        let split_index = get_deviate_index(tracks, idx, *par_idx);
+                        let split_index = get_deviate_index(tracks, layout, idx, *par_idx);
                         // Access the entry in the `inserts` map for the `split_index`.
                         match inserts.entry(split_index) {
                             // If there's already an entry at this `split_index` (meaning other
@@ -735,20 +767,23 @@ fn get_inserts(tracks: &TrackMap, compact: bool) -> HashMap<usize, Vec<Vec<Occ>>
 /// has to deviate from the current branch's column.
 ///
 /// Returns the last index on the current column.
-fn get_deviate_index(tracks: &TrackMap, index: usize, par_index: usize) -> usize {
+fn get_deviate_index(tracks: &TrackMap, layout: &TrackLayout, index: usize, par_index: usize) -> usize {
     let info = &tracks.commits[index];
 
     let par_info = &tracks.commits[par_index];
-    let par_branch = &tracks.all_branches[par_info.branch_trace.unwrap()];
+    let par_track_idx = par_info.branch_trace.unwrap();
+    let par_branch_visual = layout.track_visual(par_track_idx)
+        .expect("Parent must have visual");
 
     let mut min_split_idx = index;
     for sibling_oid in &par_info.children {
         if let Some(&sibling_index) = tracks.indices.get(sibling_oid) {
             if let Some(sibling) = tracks.commits.get(sibling_index) {
                 if let Some(sibling_trace) = sibling.branch_trace {
-                    let sibling_branch = &tracks.all_branches[sibling_trace];
+                    let sibling_branch_visual = layout.track_visual(sibling_trace)
+                        .expect("Sibling must have visual");
                     if sibling_oid != &info.oid
-                        && sibling_branch.visual.column == par_branch.visual.column
+                        && sibling_branch_visual.column == par_branch_visual.column
                         && sibling_index > min_split_idx
                     {
                         min_split_idx = sibling_index;
@@ -814,6 +849,8 @@ fn print_graph(
 fn format(
     format: &CommitFormat,
     tracks: &TrackMap,
+    layout: &TrackLayout,
+    labels: &LabelMap,
     commit: &Commit,
     info: &CommitInfo,
     head: Option<&HeadInfo>,
@@ -821,7 +858,7 @@ fn format(
     wrapping: &Option<Options>,
 ) -> Result<Vec<String>, String> {
 
-    let branch_str = format_branches(tracks, info, head, color);
+    let branch_str = format_branches(tracks, layout, info, labels, head, color);
 
     let hash_color = if color { Some(HASH_COLOR) } else { None };
 
@@ -839,8 +876,8 @@ pub fn format_branches(
 ) -> String {
     let curr_color = info
         .branch_trace
-        .map(|branch_idx| &layout.track_visual(branch_idx))
-        .and_then(|visual| visual.term_color);
+        .and_then(|branch_idx| layout.track_visual(branch_idx))
+        .map(|visual| visual.term_color);
 
     let mut branch_str = String::new();
     fn append_str_col(target: &mut String, s: &str, color: bool, s_col: u8) {
@@ -859,7 +896,7 @@ pub fn format_branches(
         }
     }
 
-    let commit_branches: Vec<_> = labels.get_labels(info.oid)
+    let commit_branches: Vec<Label> = labels.get_labels(&info.oid)
         .into_iter()
         .flatten()
         .filter(|label| label.kind == LabelType::LocalBranch
@@ -871,9 +908,9 @@ pub fn format_branches(
         branch_str.push_str(" (");
 
         // move head branch up front
-        let branches = commit_branches.iter().sorted_by_key(|br| {
+        let branches = commit_branches.iter().sorted_by_key(|label| {
             if let Some(head) = head {
-                head.name != tracks.all_branches[**br].name
+                head.name != label.name
             } else {
                 false
             }
@@ -881,7 +918,9 @@ pub fn format_branches(
 
         for (idx, branch_index) in branches.enumerate() {
             let branch = &tracks.all_branches[*branch_index];
-            let branch_color = branch.visual.term_color;
+            let branch_visual = &layout.track_visual(*branch_index)
+                .expect("Branch has visual when printing it");
+            let branch_color = branch_visual.term_color;
 
             if let Some(head) = head {
                 if idx == 0 && head.is_branch {

@@ -17,16 +17,21 @@
 //! commit. Horizontal lines represent forks (multiple children) or
 //! merges (multiple parents), and show the remaining parent relations.
 
-use crate::layout;
-use crate::track;
-use crate::settings::{BranchOrder, Settings};
-pub use git2::{BranchType, Commit, Error, Oid, Reference, Repository};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
 
+pub use git2::{BranchType, Commit, Error, Oid, Reference, Repository};
+
+use crate::layout;
+use crate::print::label;
+use crate::settings::Settings;
+use crate::track;
+
 pub use crate::layout::BranchVis;
+pub use crate::layout::TrackLayout;
+pub use crate::print::label::LabelMap;
 pub use crate::track::BranchInfo;
 pub use crate::track::CommitInfo;
 pub use crate::track::TrackMap;
@@ -36,6 +41,10 @@ pub struct GitGraph {
     pub repository: Repository,
     /// Track structure, may be updated by a separate thread
     pub tracks: Arc<Mutex<TrackMap>>,
+    /// Layout of all commits in track structure
+    pub layout: TrackLayout,
+    /// Labels to show next to commits
+    pub labels: LabelMap,
     /// The current HEAD
     pub head: HeadInfo,
 }
@@ -151,21 +160,6 @@ impl GitGraph {
         track::correct_fork_merges(&commits, &indices, &mut all_branches)?;
         track::assign_sources_targets(&commits, &indices, &mut all_branches);
 
-        let (shortest_first, forward) = match settings.branch_order {
-            BranchOrder::ShortestFirst(fwd) => (true, fwd),
-            BranchOrder::LongestFirst(fwd) => (false, fwd),
-        };
-
-        layout::assign_branch_columns(
-            &track_map,
-            &commits,
-            &indices,
-            &mut all_branches,
-            &settings.branches,
-            shortest_first,
-            forward,
-        );
-
         // Remove commits not on a branch. This will give all commits a new index.
         let filtered_commits: Vec<CommitInfo> = commits
             .into_iter()
@@ -205,13 +199,24 @@ impl GitGraph {
             }
         }
 
+        let all_commits = 0..filtered_commits.len();
+        let tracks = TrackMap {
+            commits: filtered_commits,
+            indices: filtered_indices,
+            all_branches,
+        };
+
+        // Layout tracks in 2D
+        let layout = layout::layout_track_range(&tracks, all_commits, &settings)?;
+
+        // Extract labels for formatting commits
+        let labels = label::list_labels(&repository, settings.include_remote)?;
+
         Ok(GitGraph {
             repository,
-            tracks: Arc::new(Mutex::new(TrackMap {
-                commits: filtered_commits,
-                indices: filtered_indices,
-                all_branches,
-            })),
+            tracks: Arc::new(Mutex::new(tracks)),
+            layout,
+            labels,
             head,
         })
     }

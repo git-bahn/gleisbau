@@ -11,6 +11,7 @@ use std::ops::Range;
 use regex::Regex;
 
 use crate::print::colors::to_terminal_color;
+use crate::settings::BranchOrder;
 use crate::settings::Settings;
 use crate::track::BranchInfo;
 use crate::track::TrackMap;
@@ -35,6 +36,9 @@ impl TrackLayout {
     pub fn track_visual(&self, track_inx: usize) -> Option<&BranchVis> {
         self.track_visual.get(&track_inx)
         .and_then(|&bv_idx| self.branch_visual.get(bv_idx))
+    }
+    pub fn track_visual_vec(&self) -> &Vec<BranchVis> {
+        &self.branch_visual
     }
 }
 
@@ -143,7 +147,16 @@ pub fn layout_track_range(
         track_visual: track_visual_map,
         branch_visual: branch_visuals,
     };
-    assign_branch_columns(&track_map, &mut layout, settings, false, false);
+    let (shortest_first, forward) = match settings.branch_order {
+        BranchOrder::ShortestFirst(fwd) => (true, fwd),
+        BranchOrder::LongestFirst(fwd) => (false, fwd),
+    };
+    assign_branch_columns(
+        &track_map,
+        &mut layout,
+        settings,
+        shortest_first,
+        forward);
  
     Ok(layout)
 }
