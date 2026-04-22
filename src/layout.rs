@@ -193,6 +193,9 @@ fn create_branch_visual(
     })
 }
 
+// Keys used to sort branches when assigning columns
+type BranchSort = Vec<(usize, usize, usize, usize, usize, usize)>;
+
 /// Sorts branches into columns for visualization, that all branches can be
 /// visualizes linearly and without overlaps. Uses Shortest-First scheduling.
 pub fn assign_branch_columns(
@@ -202,16 +205,13 @@ pub fn assign_branch_columns(
     shortest_first: bool,
     forward: bool,
 ) {
-    // 1. Group occupancy tracking
-    // occupied[group_idx][column_idx] = Vec<(start_commit_idx, end_commit_idx)>
-    let mut occupied: Vec<Vec<Vec<(usize, usize)>>> = vec![vec![]; settings.branches.order.len() + 1];
 
     let length_sort_factor = if shortest_first { 1 } else { -1 };
     let start_sort_factor = if forward { 1 } else { -1 };
 
-    // 2. Prepare branches for sorting. 
+    // Collect keys used to sort branches.
     // We only care about branches that have a visual representation in this layout.
-    let mut branches_sort: Vec<_> = layout.track_visual.iter()
+    let mut branches_sort: BranchSort = layout.track_visual.iter()
         .map(|(&branch_idx, &vis_idx)| {
             let br = &track_map.all_branches[branch_idx];
             let vis = &layout.branch_visual[vis_idx];
@@ -226,7 +226,7 @@ pub fn assign_branch_columns(
         })
         .collect();
 
-    // Sort by priority groups, then length, then start position
+    // Sort by order group, then length, then start position
     branches_sort.sort_by_cached_key(|tup| {
         (
             std::cmp::max(tup.4, tup.5),
@@ -235,9 +235,33 @@ pub fn assign_branch_columns(
         )
     });
 
-    // 3. Assign columns inside each group
+    // Assign columns within each group
+    let occupied = assign_group_columns(
+        settings.branches.order.len() + 1,
+        branches_sort,
+        &track_map.all_branches,
+        layout,
+    );
+
+    // Apply group offsets to calculate absolute columns
+    finalize_absolute_columns(&mut layout.branch_visual, occupied);
+}
+
+// For each order group, for each column inside that group, trach which rows are occupied.
+// occupied[group_idx][column_idx] = Vec<(start_commit_idx, end_commit_idx)>
+type Occupation = Vec<Vec<Vec<(usize, usize)>>>;
+
+/// Given an order of branches, assign them a column inside each order group
+fn assign_group_columns(
+    order_group_count: usize,
+    branches_sort: BranchSort,
+    branch_list: &Vec<BranchInfo>,
+    layout: &mut TrackLayout,
+ ) -> Occupation {
+    let mut occupied: Occupation = vec![vec![]; order_group_count];
+
     for (b_idx, v_idx, start, end, _, _) in branches_sort {
-        let branch_topo = &track_map.all_branches[b_idx];
+        let branch_topo = &branch_list[b_idx];
         let group = layout.branch_visual[v_idx].order_group;
         let group_occ = &mut occupied[group];
 
@@ -273,13 +297,12 @@ pub fn assign_branch_columns(
         group_occ[found_column].push((start, end));
     }
 
-    // 4. Final Pass: Apply group offsets to calculate absolute columns
-    finalize_absolute_columns(&mut layout.branch_visual, occupied);
-}
+    occupied
+ }
 
 fn finalize_absolute_columns(
     branch_visual_list: &mut Vec<BranchVis>, 
-    occupied: Vec<Vec<Vec<(usize, usize)>>>
+    occupied: Occupation
  ) {
     
     // Compute start column of each group
