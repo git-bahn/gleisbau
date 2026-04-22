@@ -392,8 +392,8 @@ pub fn format_oneline(
     }
 }
 
-/// Format a commit for `CommitFormat::Short`, `CommitFormat::Medium` or `CommitFormat::Full`.
-pub fn format(
+/// Format commit metadata as a multiline string.
+pub fn format_commit_metadata(
     commit: &Commit,
     branches: String,
     wrapping: &Option<Options>,

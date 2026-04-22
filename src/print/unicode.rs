@@ -825,10 +825,10 @@ fn format(
 
     let hash_color = if color { Some(HASH_COLOR) } else { None };
 
-    crate::print::format::format(commit, branch_str, wrapping, hash_color, format)
+    crate::print::format::format_commit_metadata(commit, branch_str, wrapping, hash_color, format)
 }
 
-/// Format branches and tags.
+/// Build a string listing branches and tag
 pub fn format_branches(
     tracks: &TrackMap,
     layout: &TrackLayout,
