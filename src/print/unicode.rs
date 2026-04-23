@@ -190,7 +190,6 @@ fn build_commit_lines_and_map<'a>(
         // Format the commit message lines
         let lines = format(
             &settings.format,
-            tracks,
             layout,
             &labels,
             commit,
@@ -848,7 +847,6 @@ fn print_graph(
 /// Format a commit.
 fn format(
     format: &CommitFormat,
-    tracks: &TrackMap,
     layout: &TrackLayout,
     labels: &LabelMap,
     commit: &Commit,
@@ -858,7 +856,7 @@ fn format(
     wrapping: &Option<Options>,
 ) -> Result<Vec<String>, String> {
 
-    let branch_str = format_branches(tracks, layout, info, labels, head, color);
+    let branch_str = format_branches(layout, info, labels, head, color);
 
     let hash_color = if color { Some(HASH_COLOR) } else { None };
 
@@ -867,7 +865,6 @@ fn format(
 
 /// Build a string listing branches and tag
 pub fn format_branches(
-    tracks: &TrackMap,
     layout: &TrackLayout,
     info: &CommitInfo,
     labels: &LabelMap,
@@ -901,7 +898,7 @@ pub fn format_branches(
         .flatten()
         .filter(|label| label.kind == LabelType::LocalBranch
                      || label.kind == LabelType::RemoteBranch)
-        .map(|&label| label.clone())
+        .map(|label| label.clone())
         .collect();
     
     if !commit_branches.is_empty() {
@@ -916,11 +913,8 @@ pub fn format_branches(
             }
         });
 
-        for (idx, branch_index) in branches.enumerate() {
-            let branch = &tracks.all_branches[*branch_index];
-            let branch_visual = &layout.track_visual(*branch_index)
-                .expect("Branch has visual when printing it");
-            let branch_color = branch_visual.term_color;
+        for (idx, label) in branches.enumerate() {
+            let branch_color = label.term_color;
 
             if let Some(head) = head {
                 if idx == 0 && head.is_branch {
@@ -946,12 +940,11 @@ pub fn format_branches(
     if !commit_tags.is_empty() {
         branch_str.push_str(" [");
         for (idx, tag_label) in commit_tags.iter().enumerate() {
-            /* TODO find tag color
-            let tag = &tracks.all_branches[*tag_index];
-            let tag_color = curr_color.unwrap_or(&tag.visual.term_color);
+            // Use branch colour if present, otherwise use tag color
+            // TODO Should this be the reverse??
+            // Is the logic correct, and branches can have color None?
+            let tag_color = curr_color.unwrap_or(tag_label.term_color);
 
-            let tag_name = &tag.name[5..];
-            */let tag_color = WHITE;
             append_str_col(&mut branch_str, &tag_label.name, color, tag_color);
 
             if idx < commit_tags.len() - 1 {
