@@ -5,6 +5,7 @@ It is intended as last step before printing. Decoration of commits,
 e.g. with tags and branch labels, should be done during printing.
 */
 
+use std::cmp::max;
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -159,6 +160,43 @@ pub fn layout_track_range(
         forward);
  
     Ok(layout)
+}
+
+/// Find the index at which a between-branch connection
+/// has to deviate from the current branch's column.
+///
+/// Returns the last index on the current column.
+pub fn get_deviate_index(tracks: &TrackMap, layout: &TrackLayout, index: usize, par_index: usize) -> usize {
+    let info = &tracks.commits[index];
+
+    let par_info = &tracks.commits[par_index];
+    let par_branch_index = par_info.branch_trace.unwrap();
+    let par_branch_visual = layout.track_visual(par_branch_index).unwrap();
+
+    let mut min_split_idx = index;
+    for sibling_oid in &par_info.children {
+        if let Some(&sibling_index) = tracks.indices.get(sibling_oid) {
+            if let Some(sibling) = tracks.commits.get(sibling_index) {
+                if let Some(sibling_trace) = sibling.branch_trace {
+                    let sibling_branch_visual = layout.track_visual(sibling_trace).unwrap();
+                    if sibling_oid != &info.oid
+                        && sibling_branch_visual.column == par_branch_visual.column
+                        && sibling_index > min_split_idx
+                    {
+                        min_split_idx = sibling_index;
+                    }
+                }
+            }
+        }
+    }
+
+    // TODO: in cases where no crossings occur, the rule for merge commits can also be applied to normal commits
+    // See also branch::trace_branch()
+    if info.is_merge {
+        max(index, min_split_idx)
+    } else {
+        (par_index as i32 - 1) as usize
+    }
 }
 
 fn create_branch_visual(
