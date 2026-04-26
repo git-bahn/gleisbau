@@ -612,24 +612,13 @@ pub fn trace_branch(
                 }
             } else {
                 // Determine the start_index for the branch visual range
-                match prev_index {
-                    None => start_index = Some(*index as i32 - 1),
-                    Some(p_idx) => {
-                        if commits[p_idx].is_merge {
-                            let mut temp_index = p_idx;
-                            for sibling_oid in &commits[*index].children {
-                                if sibling_oid != &curr_oid {
-                                    if let Some(&sib_idx) = indices.get(sibling_oid) {
-                                        if sib_idx > temp_index { temp_index = sib_idx; }
-                                    }
-                                }
-                            }
-                            start_index = Some(temp_index as i32);
-                        } else {
-                            start_index = Some(*index as i32 - 1);
-                        }
-                    }
-                }
+                start_index = determine_start_index(
+                    commits,
+                    indices,
+                    prev_index,
+                    index,
+                    &curr_oid,
+                );
                 break;
             }
         }
@@ -651,6 +640,34 @@ pub fn trace_branch(
     finalize_branch_range(branch, start_index);
     
     Ok(any_assigned)
+}
+
+fn determine_start_index(
+    commits: &[CommitInfo],
+    indices: &HashMap<Oid, usize>,
+    prev_index: Option<usize>,
+    index: &usize,
+    curr_oid: &Oid,
+) -> Option<i32> {
+    match prev_index {
+    None => Some(*index as i32 - 1),
+    Some(p_idx) => {
+        if commits[p_idx].is_merge {
+            let mut temp_index = p_idx;
+            for sibling_oid in &commits[*index].children {
+                if sibling_oid != curr_oid {
+                    if let Some(&sib_idx) = indices.get(sibling_oid) {
+                        if sib_idx > temp_index { temp_index = sib_idx; }
+                    }
+                }
+            }
+            Some(temp_index as i32)
+        } else {
+            Some(*index as i32 - 1)
+        }
+    }
+}
+
 }
 
 fn finalize_branch_range(branch: &mut BranchInfo, start_index: Option<i32>) {
