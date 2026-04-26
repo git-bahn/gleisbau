@@ -601,15 +601,7 @@ pub fn trace_branch(
             if new_name == &old_name && old_end_val >= new_end_val {
                 // Branch continuation logic
                 let old_branch = &mut branches[old_trace];
-                if let Some(old_limit) = old_branch.range.1 {
-                    if index > &old_limit {
-                        old_branch.range = (None, None);
-                    } else {
-                        old_branch.range = (Some(*index), old_branch.range.1);
-                    }
-                } else {
-                    old_branch.range = (Some(*index), old_branch.range.1);
-                }
+                update_branch_range(old_branch, *index);
             } else {
                 // Determine the start_index for the branch visual range
                 start_index = determine_start_index(
@@ -640,6 +632,18 @@ pub fn trace_branch(
     finalize_branch_range(branch, start_index);
     
     Ok(any_assigned)
+}
+
+fn update_branch_range(
+    old_branch: &mut BranchInfo,
+    index: usize)
+{
+    old_branch.range.0 = Some(index);
+    if let Some(old_limit) = old_branch.range.1 {
+        if index > old_limit {
+            old_branch.range = (None, None);
+        }
+    }
 }
 
 fn determine_start_index(
