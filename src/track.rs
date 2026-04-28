@@ -36,11 +36,14 @@ pub struct TrackMap {
 
 /// Represents a branch (real or derived from merge summary).
 pub struct BranchInfo {
+    /// The Object ID that the branch/tag points at. Used as the grand-child to start tracing the branch towards grand-parent.
     pub target: Oid,
     pub merge_target: Option<Oid>,
     pub source_branch: Option<usize>,
     pub target_branch: Option<usize>,
+    /// Name of branch. Either the branch/tag name, or derived from a merge-commit message.
     pub name: String,
+    /// When two branches want the same commit, the one that is most persistent wins. In this case lower numbers wins.
     pub persistence: u8,
     /// Is branch a remote reference
     pub is_remote: bool,
@@ -80,9 +83,13 @@ impl BranchInfo {
 
 /// Represents a commit.
 pub struct CommitInfo {
+    /// Commit object identifier from git2
     pub oid: Oid,
+    /// True if commit has multiple parents
     pub is_merge: bool,
+    /// Parents of commit. Filled in first pass
     pub parents: [Option<Oid>; 2],
+    /// Children of commit. Filled in second pass
     pub children: Vec<Oid>,
     /// Index into TrackMap.all_branches
     pub branch_trace: Option<usize>,
@@ -214,12 +221,15 @@ pub fn assign_branches(
     // We only want to keep branches that has assigned some commit,
     // or that is merged into some other branch.
     // Compute branch index map that deletes the unwanted.
+    // The branch-order set by [extract_branches] determines which branch will
+    // be first to claim their desired commits.
     let mut index_map: Vec<_> = (0..branches.len())
         .map(|old_idx| {
             let (target, is_merged) = {
                 let branch = &branches[old_idx];
                 (branch.target, branch.is_merged)
             };
+            // ?? idx = branch.target
             if let Some(&idx) = &indices.get(&target) {
                 let info = &mut commits[idx];
                 let oid = info.oid;
@@ -569,8 +579,10 @@ fn extract_branches(
     Ok(all_branches)
 }
 
-/// Traces back branches by following 1st commit parent,
+/// Traces back a branch by following 1st commit parent,
 /// until a commit is reached that already has a trace.
+///
+/// Returns true if any commits was assigned to this branch
 pub fn trace_branch(
     repository: &Repository,
     commits: &mut [CommitInfo],

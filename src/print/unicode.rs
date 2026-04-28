@@ -766,6 +766,14 @@ fn get_inserts(tracks: &TrackMap, layout: &TrackLayout, compact: bool) -> HashMa
 /// has to deviate from the current branch's column.
 ///
 /// Returns the last index on the current column.
+///
+/// Arguments
+///   tracks - grouping of commits into tracks
+///   layout - 2D arrangement of tracks
+///   index - index of commit in TrackMap
+///   par_index - index of parent of commit
+/// Returns:
+///   index of oldest commit in same coloum as start commit ???
 fn get_deviate_index(tracks: &TrackMap, layout: &TrackLayout, index: usize, par_index: usize) -> usize {
     let info = &tracks.commits[index];
 
