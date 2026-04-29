@@ -223,21 +223,19 @@ pub fn assign_branches(
     // Compute branch index map that deletes the unwanted.
     // The branch-order set by [extract_branches] determines which branch will
     // be first to claim their desired commits.
-    let mut index_map: Vec<_> = (0..branches.len())
+    let index_map: Vec<_> = (0..branches.len())
         .map(|old_idx| {
-            let (target, is_merged) = {
-                let branch = &branches[old_idx];
-                (branch.target, branch.is_merged)
-            };
-            // ?? idx = branch.target
-            if let Some(&idx) = &indices.get(&target) {
+            if let Some(&idx) = &indices.get(&branches[old_idx].target) {
                 let info = &mut commits[idx];
                 let oid = info.oid;
                 let any_assigned =
                     trace_branch(repository, commits, indices, &mut branches, oid, old_idx)
                         .unwrap_or(false);
 
-                if any_assigned || !is_merged {
+                // New policy: Do not keep any branch that has no commits assigned.
+                // When a commit has multiple labels (branches and/or tags)
+                // you must use module label.rs instead.
+                if any_assigned {
                     branch_idx += 1;
                     Some(branch_idx - 1)
                 } else {
@@ -249,32 +247,13 @@ pub fn assign_branches(
         })
         .collect();
 
-    let mut commit_count = vec![0; branches.len()];
-    for info in commits.iter_mut() {
-        if let Some(trace) = info.branch_trace {
-            commit_count[trace] += 1;
-        }
-    }
-
-    // Get rid of branches that have no commits and is merged and is not a tag
-    let mut count_skipped = 0;
-    for (idx, branch) in branches.iter().enumerate() {
-        if let Some(mapped) = index_map[idx] {
-            if commit_count[idx] == 0 && branch.is_merged && !branch.is_tag {
-                index_map[idx] = None;
-                count_skipped += 1;
-            } else {
-                index_map[idx] = Some(mapped - count_skipped);
-            }
-        }
-    }
-
     for info in commits.iter_mut() {
         if let Some(trace) = info.branch_trace {
             info.branch_trace = index_map[trace];
         }
     }
 
+    // Update variable 'branches' to remove skipped branches
     let branches: Vec<_> = branches
         .into_iter()
         .enumerate()
