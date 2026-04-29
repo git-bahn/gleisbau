@@ -160,44 +160,8 @@ impl GitGraph {
         track::correct_fork_merges(&commits, &indices, &mut all_branches)?;
         track::assign_sources_targets(&commits, &indices, &mut all_branches);
 
-        // Remove commits not on a branch. This will give all commits a new index.
-        let filtered_commits: Vec<CommitInfo> = commits
-            .into_iter()
-            .filter(|info| info.branch_trace.is_some())
-            .collect();
-
-        // Create indices from git object id into the filtered commits
-        let filtered_indices: HashMap<Oid, usize> = filtered_commits
-            .iter()
-            .enumerate()
-            .map(|(idx, info)| (info.oid, idx))
-            .collect();
-
-        // Map from old index to new index. None, if old index was removed
-        let index_map: HashMap<usize, Option<&usize>> = indices
-            .iter()
-            .map(|(oid, index)| (*index, filtered_indices.get(oid)))
-            .collect();
-
-        // Update branch.range from old to new index. Shrink if endpoints were removed.
-        for branch in all_branches.iter_mut() {
-            if let Some(mut start_idx) = branch.range.0 {
-                let mut idx0 = index_map[&start_idx];
-                while idx0.is_none() {
-                    start_idx += 1;
-                    idx0 = index_map[&start_idx];
-                }
-                branch.range.0 = Some(*idx0.unwrap());
-            }
-            if let Some(mut end_idx) = branch.range.1 {
-                let mut idx0 = index_map[&end_idx];
-                while idx0.is_none() {
-                    end_idx -= 1;
-                    idx0 = index_map[&end_idx];
-                }
-                branch.range.1 = Some(*idx0.unwrap());
-            }
-        }
+        let (filtered_commits, filtered_indices) = 
+            remove_commits_not_on_a_branch(commits, indices, &mut all_branches);
 
         let all_commits = 0..filtered_commits.len();
         let tracks = TrackMap {
@@ -228,6 +192,53 @@ impl GitGraph {
     pub fn commit(&self, id: Oid) -> Result<Commit<'_>, Error> {
         self.repository.find_commit(id)
     }
+}
+
+/// Consume commits and indices, and return filtered versions
+fn remove_commits_not_on_a_branch(
+    commits: Vec<CommitInfo>,
+    indices: HashMap<Oid, usize>,
+    all_branches: &mut [BranchInfo],
+ ) -> (Vec<CommitInfo>, HashMap<Oid, usize>) {
+    // Remove commits not on a branch. This will give all commits a new index.
+    let filtered_commits: Vec<CommitInfo> = commits
+        .into_iter()
+        .filter(|info| info.branch_trace.is_some())
+        .collect();
+
+    // Create indices from git object id into the filtered commits
+    let filtered_indices: HashMap<Oid, usize> = filtered_commits
+        .iter()
+        .enumerate()
+        .map(|(idx, info)| (info.oid, idx))
+        .collect();
+
+    // Map from old index to new index. None, if old index was removed
+    let index_map: HashMap<usize, Option<&usize>> = indices
+        .iter()
+        .map(|(oid, index)| (*index, filtered_indices.get(oid)))
+        .collect();
+
+    // Update branch.range from old to new index. Shrink if endpoints were removed.
+    for branch in all_branches.iter_mut() {
+        if let Some(mut start_idx) = branch.range.0 {
+            let mut idx0 = index_map[&start_idx];
+            while idx0.is_none() {
+                start_idx += 1;
+                idx0 = index_map[&start_idx];
+            }
+            branch.range.0 = Some(*idx0.unwrap());
+        }
+        if let Some(mut end_idx) = branch.range.1 {
+            let mut idx0 = index_map[&end_idx];
+            while idx0.is_none() {
+                end_idx -= 1;
+                idx0 = index_map[&end_idx];
+            }
+            branch.range.1 = Some(*idx0.unwrap());
+        }
+    }
+    (filtered_commits, filtered_indices)
 }
 
 /// Information about the current HEAD
