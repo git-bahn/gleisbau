@@ -18,8 +18,6 @@ use crate::settings::{MergePatterns, Settings};
 const ORIGIN: &str = "origin/";
 const FORK: &str = "fork/";
 
-
-
 /**
     Group commits into tracks. A track is a sequence of commits
     where every commit has a parent inside the track, except the oldest
@@ -79,7 +77,6 @@ impl BranchInfo {
         }
     }
 }
-
 
 /// Represents a commit.
 pub struct CommitInfo {
@@ -310,7 +307,9 @@ pub fn assign_sources_targets(
             if let Some(par_info) = indices.get(par_oid).and_then(|&i| commits.get(i)) {
                 // If the parent is on a different branch trace, that's our source
                 if par_info.branch_trace != info.branch_trace {
-                    if let (Some(this_b_idx), Some(src_b_idx)) = (info.branch_trace, par_info.branch_trace) {
+                    if let (Some(this_b_idx), Some(src_b_idx)) =
+                        (info.branch_trace, par_info.branch_trace)
+                    {
                         branches[this_b_idx].source_branch = Some(src_b_idx);
                     }
                 }
@@ -420,7 +419,6 @@ fn extract_merge_branches(
 
             // Attempt to get the commit summary.
             if let Some(summary) = commit.summary() {
-
                 let parent_oid = commit
                     .parent_id(1)
                     .map_err(|err| err.message().to_string())?;
@@ -438,9 +436,9 @@ fn extract_merge_branches(
                     Some(info.oid), // The merge commit itself.
                     branch_name,
                     persistence,
-                    false, // Not a remote branch.
-                    true,  // This is a derived merge branch.
-                    false, // Not a tag.
+                    false,         // Not a remote branch.
+                    true,          // This is a derived merge branch.
+                    false,         // Not a tag.
                     Some(idx + 1), // End index typically points to the commit after the merge.
                 );
                 merge_branches.push(branch_info);
@@ -494,7 +492,6 @@ fn extract_tags_as_branches(
         if let Ok(target_oid) = target {
             // If the target commit is within our processed commits, create a BranchInfo.
             if let Some(target_index) = indices.get(&target_oid) {
-
                 // Create the BranchInfo object for the tag.
                 let tag_info = BranchInfo::new(
                     target_oid,
@@ -577,14 +574,14 @@ pub fn trace_branch(
 
     while let Some(index) = indices.get(&curr_oid) {
         let info = &mut commits[*index];
-        
+
         if let Some(old_trace) = info.branch_trace {
             // Compare names and ranges without touching visuals
             let (old_name, old_range_start) = {
                 let old_branch = &branches[old_trace];
                 (old_branch.name.clone(), old_branch.range.0)
             };
-            
+
             let new_name = &branches[branch_index].name;
             let old_end_val = old_range_start.unwrap_or(0);
             let new_end_val = branches[branch_index].range.0.unwrap_or(0);
@@ -595,13 +592,7 @@ pub fn trace_branch(
                 update_branch_range(old_branch, *index);
             } else {
                 // Determine the start_index for the branch visual range
-                start_index = determine_start_index(
-                    commits,
-                    indices,
-                    prev_index,
-                    index,
-                    &curr_oid,
-                );
+                start_index = determine_start_index(commits, indices, prev_index, index, &curr_oid);
                 break;
             }
         }
@@ -621,14 +612,11 @@ pub fn trace_branch(
     // Finalize the range for this branch
     let branch = &mut branches[branch_index];
     finalize_branch_range(branch, start_index);
-    
+
     Ok(any_assigned)
 }
 
-fn update_branch_range(
-    old_branch: &mut BranchInfo,
-    index: usize)
-{
+fn update_branch_range(old_branch: &mut BranchInfo, index: usize) {
     old_branch.range.0 = Some(index);
     if let Some(old_limit) = old_branch.range.1 {
         if index > old_limit {
@@ -645,24 +633,25 @@ fn determine_start_index(
     curr_oid: &Oid,
 ) -> Option<i32> {
     match prev_index {
-    None => Some(*index as i32 - 1),
-    Some(p_idx) => {
-        if commits[p_idx].is_merge {
-            let mut temp_index = p_idx;
-            for sibling_oid in &commits[*index].children {
-                if sibling_oid != curr_oid {
-                    if let Some(&sib_idx) = indices.get(sibling_oid) {
-                        if sib_idx > temp_index { temp_index = sib_idx; }
+        None => Some(*index as i32 - 1),
+        Some(p_idx) => {
+            if commits[p_idx].is_merge {
+                let mut temp_index = p_idx;
+                for sibling_oid in &commits[*index].children {
+                    if sibling_oid != curr_oid {
+                        if let Some(&sib_idx) = indices.get(sibling_oid) {
+                            if sib_idx > temp_index {
+                                temp_index = sib_idx;
+                            }
+                        }
                     }
                 }
+                Some(temp_index as i32)
+            } else {
+                Some(*index as i32 - 1)
             }
-            Some(temp_index as i32)
-        } else {
-            Some(*index as i32 - 1)
         }
     }
-}
-
 }
 
 fn finalize_branch_range(branch: &mut BranchInfo, start_index: Option<i32>) {
@@ -742,4 +731,3 @@ mod tests {
         );
     }
 }
-

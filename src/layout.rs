@@ -19,7 +19,6 @@ use crate::track::TrackMap;
 
 const ORIGIN: &str = "origin/";
 
-
 /**
     Given a range of commits in a [TrackMap] you can construct a [TrackLayout]
     which will assign columns and colours to the tracks.
@@ -35,8 +34,9 @@ pub struct TrackLayout {
 
 impl TrackLayout {
     pub fn track_visual(&self, track_inx: usize) -> Option<&BranchVis> {
-        self.track_visual.get(&track_inx)
-        .and_then(|&bv_idx| self.branch_visual.get(bv_idx))
+        self.track_visual
+            .get(&track_inx)
+            .and_then(|&bv_idx| self.branch_visual.get(bv_idx))
     }
     pub fn track_visual_vec(&self) -> &Vec<BranchVis> {
         &self.branch_visual
@@ -71,7 +71,7 @@ impl BranchVis {
         }
     }
 }
-/// Generates a TrackLayout by extracting and calculating visual data for 
+/// Generates a TrackLayout by extracting and calculating visual data for
 /// branches active within a specific commit range.
 pub fn layout_track_range(
     track_map: &TrackMap,
@@ -80,7 +80,7 @@ pub fn layout_track_range(
 ) -> Result<TrackLayout, String> {
     let mut branch_visuals = Vec::new();
     let mut track_visual_map = HashMap::new();
-    
+
     // Counter for color rotation moved here
     let mut color_counter = 0;
 
@@ -88,8 +88,7 @@ pub fn layout_track_range(
     for i in range.clone() {
         // Find track assigned to commit
         let commit = &track_map.commits[i];
-        let Some(b_idx) = commit.branch_trace
-        else { 
+        let Some(b_idx) = commit.branch_trace else {
             todo!("Decide how to handle commit without track");
             /*
                 Do I want to show it?
@@ -101,16 +100,12 @@ pub fn layout_track_range(
         // If the track does not yet have a visualization, create it
         if !track_visual_map.contains_key(&b_idx) {
             let branch_info = &track_map.all_branches[b_idx];
-            
+
             // We increment the counter only when a new visual is needed
             color_counter += 1;
 
-            let visual_data = create_branch_visual(
-                color_counter,
-                branch_info, 
-                track_map,
-                settings
-            )?;
+            let visual_data =
+                create_branch_visual(color_counter, branch_info, track_map, settings)?;
 
             let vis_idx = branch_visuals.len();
             branch_visuals.push(visual_data);
@@ -122,7 +117,7 @@ pub fn layout_track_range(
     // We iterate through the visuals we just created
     for (b_idx, &vis_idx) in track_visual_map.iter() {
         let branch = &track_map.all_branches[*b_idx];
-        
+
         // Resolve Target Order Group
         if let Some(target_idx) = branch.target_branch {
             // Check if the target branch has a visual in our current layout
@@ -141,7 +136,7 @@ pub fn layout_track_range(
             }
         }
     }
-    
+
     // Pass 3: The Packing Algorithm
     let mut layout = TrackLayout {
         source: range,
@@ -152,13 +147,8 @@ pub fn layout_track_range(
         BranchOrder::ShortestFirst(fwd) => (true, fwd),
         BranchOrder::LongestFirst(fwd) => (false, fwd),
     };
-    assign_branch_columns(
-        &track_map,
-        &mut layout,
-        settings,
-        shortest_first,
-        forward);
- 
+    assign_branch_columns(&track_map, &mut layout, settings, shortest_first, forward);
+
     Ok(layout)
 }
 
@@ -166,7 +156,12 @@ pub fn layout_track_range(
 /// has to deviate from the current branch's column.
 ///
 /// Returns the last index on the current column.
-pub fn get_deviate_index(tracks: &TrackMap, layout: &TrackLayout, index: usize, par_index: usize) -> usize {
+pub fn get_deviate_index(
+    tracks: &TrackMap,
+    layout: &TrackLayout,
+    index: usize,
+    par_index: usize,
+) -> usize {
     let info = &tracks.commits[index];
 
     let par_info = &tracks.commits[par_index];
@@ -207,13 +202,17 @@ fn create_branch_visual(
 ) -> Result<BranchVis, String> {
     let mut name_to_color = &branch.name;
 
-    // The Logic from trace_branch: 
+    // The Logic from trace_branch:
     // If this is a remote branch, check if we should inherit a local color
     if branch.name.starts_with(ORIGIN) {
         let local_name = &branch.name[7..];
         // Look for a local branch with the same name in TrackMap
-        if let Some(local_idx) = track_map.all_branches.iter().position(|b| b.name == local_name) {
-            // We can now use the local_name for color calculation 
+        if let Some(local_idx) = track_map
+            .all_branches
+            .iter()
+            .position(|b| b.name == local_name)
+        {
+            // We can now use the local_name for color calculation
             name_to_color = &track_map.all_branches[local_idx].name;
         }
     }
@@ -256,13 +255,14 @@ pub fn assign_branch_columns(
     shortest_first: bool,
     forward: bool,
 ) {
-
     let length_sort_factor = if shortest_first { 1 } else { -1 };
     let start_sort_factor = if forward { 1 } else { -1 };
 
     // Collect keys used to sort branches.
     // We only care about branches that have a visual representation in this layout.
-    let mut branches_sort: BranchSort = layout.track_visual.iter()
+    let mut branches_sort: BranchSort = layout
+        .track_visual
+        .iter()
         .map(|(&branch_idx, &vis_idx)| {
             let br = &track_map.all_branches[branch_idx];
             let vis = &layout.branch_visual[vis_idx];
@@ -271,8 +271,10 @@ pub fn assign_branch_columns(
                 vis_idx,
                 br.range.0.unwrap_or(0),
                 br.range.1.unwrap_or(track_map.commits.len() - 1),
-                vis.source_order_group.unwrap_or(settings.branches.order.len() + 1),
-                vis.target_order_group.unwrap_or(settings.branches.order.len() + 1),
+                vis.source_order_group
+                    .unwrap_or(settings.branches.order.len() + 1),
+                vis.target_order_group
+                    .unwrap_or(settings.branches.order.len() + 1),
             )
         })
         .collect();
@@ -308,7 +310,7 @@ fn assign_group_columns(
     branches_sort: BranchSort,
     branch_list: &Vec<BranchInfo>,
     layout: &mut TrackLayout,
- ) -> Occupation {
+) -> Occupation {
     let mut occupied: Occupation = vec![vec![]; order_group_count];
 
     for (b_idx, v_idx, start, end, _, _) in branches_sort {
@@ -324,15 +326,17 @@ fn assign_group_columns(
 
         for i in 0..col_count {
             let col_idx = if align_right { col_count - i - 1 } else { i };
-            
+
             // Check if this column is physically blocked by another branch in this range
-            let is_blocked = group_occ[col_idx].iter().any(|(s, e)| start <= *e && end >= *s);
-            
+            let is_blocked = group_occ[col_idx]
+                .iter()
+                .any(|(s, e)| start <= *e && end >= *s);
+
             if !is_blocked {
-                // Logic check: don't occupy the same column as our merge target 
+                // Logic check: don't occupy the same column as our merge target
                 // if they overlap at the point of merge
                 let is_merge_collision = check_merge_collision(branch_topo, col_idx, layout);
-                
+
                 if !is_merge_collision {
                     found_column = col_idx;
                     break;
@@ -349,13 +353,9 @@ fn assign_group_columns(
     }
 
     occupied
- }
+}
 
-fn finalize_absolute_columns(
-    branch_visual_list: &mut Vec<BranchVis>, 
-    occupied: Occupation
- ) {
-    
+fn finalize_absolute_columns(branch_visual_list: &mut Vec<BranchVis>, occupied: Occupation) {
     // Compute start column of each group
     let mut group_offset: Vec<usize> = vec![];
     let mut acc = 0;
@@ -379,13 +379,15 @@ fn finalize_absolute_columns(
 /// Helper: Determines if a branch prefers to be on the right side of its group
 fn should_align_right(branch: &BranchInfo, v_idx: usize, layout: &TrackLayout) -> bool {
     let this_group = layout.branch_visual[v_idx].order_group;
-    
-    let source_to_right = branch.source_branch
+
+    let source_to_right = branch
+        .source_branch
         .and_then(|s_idx| layout.track_visual.get(&s_idx))
         .map(|&sv_idx| layout.branch_visual[sv_idx].order_group > this_group)
         .unwrap_or(false);
 
-    let target_to_right = branch.target_branch
+    let target_to_right = branch
+        .target_branch
         .and_then(|t_idx| layout.track_visual.get(&t_idx))
         .map(|&tv_idx| layout.branch_visual[tv_idx].order_group > this_group)
         .unwrap_or(false);
@@ -398,10 +400,11 @@ fn check_merge_collision(branch: &BranchInfo, col_idx: usize, layout: &TrackLayo
     if let Some(target_idx) = branch.target_branch {
         if let Some(&tv_idx) = layout.track_visual.get(&target_idx) {
             let target_vis = &layout.branch_visual[tv_idx];
-            let this_vis = &layout.branch_visual[layout.track_visual[&branch.target_branch.unwrap()]];
+            let this_vis =
+                &layout.branch_visual[layout.track_visual[&branch.target_branch.unwrap()]];
 
-            if target_vis.order_group == this_vis.order_group
-            && target_vis.column == Some(col_idx) {
+            if target_vis.order_group == this_vis.order_group && target_vis.column == Some(col_idx)
+            {
                 return true;
             }
         }

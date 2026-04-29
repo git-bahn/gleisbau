@@ -17,7 +17,6 @@
 //! commit. Horizontal lines represent forks (multiple children) or
 //! merges (multiple parents), and show the remaining parent relations.
 
-
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -156,11 +155,12 @@ impl GitGraph {
 
         track::assign_children(&mut commits, &indices);
 
-        let mut all_branches = track::assign_branches(&repository, &mut commits, &indices, settings)?;
+        let mut all_branches =
+            track::assign_branches(&repository, &mut commits, &indices, settings)?;
         track::correct_fork_merges(&commits, &indices, &mut all_branches)?;
         track::assign_sources_targets(&commits, &indices, &mut all_branches);
 
-        let (filtered_commits, filtered_indices) = 
+        let (filtered_commits, filtered_indices) =
             remove_commits_not_on_a_branch(commits, indices, &mut all_branches);
 
         let all_commits = 0..filtered_commits.len();
@@ -199,7 +199,7 @@ fn remove_commits_not_on_a_branch(
     commits: Vec<CommitInfo>,
     indices: HashMap<Oid, usize>,
     all_branches: &mut [BranchInfo],
- ) -> (Vec<CommitInfo>, HashMap<Oid, usize>) {
+) -> (Vec<CommitInfo>, HashMap<Oid, usize>) {
     // Remove commits not on a branch. This will give all commits a new index.
     let filtered_commits: Vec<CommitInfo> = commits
         .into_iter()

@@ -14,9 +14,9 @@ use git2::BranchType;
 use git2::Oid;
 use git2::Repository;
 
-use crate::settings::Settings;
 use crate::layout;
 use crate::print;
+use crate::settings::Settings;
 
 /// All branch- and tag-labels present
 #[derive(Default)]
@@ -50,11 +50,16 @@ impl LabelMap {
         name: T,
         kind: LabelType,
         term_color: u8,
-        svg_color: String) 
-    {
+        svg_color: String,
+    ) {
         let name = name.into();
         let label_list = self.labels.entry(oid).or_insert(vec![]);
-        label_list.push(Label { name, kind, term_color, svg_color });
+        label_list.push(Label {
+            name,
+            kind,
+            term_color,
+            svg_color,
+        });
     }
     pub fn get_labels(&self, oid: &Oid) -> Option<&Vec<Label>> {
         self.labels.get(oid)
@@ -62,8 +67,7 @@ impl LabelMap {
 }
 
 /// Extract all branch and tag names from repo and assign colours from settings
-pub fn list_labels(settings: &Settings, repository: &Repository)
- -> Result<LabelMap, String> {
+pub fn list_labels(settings: &Settings, repository: &Repository) -> Result<LabelMap, String> {
     let include_remote = settings.include_remote;
 
     let mut labels = LabelMap::default();
@@ -83,10 +87,8 @@ fn extract_branches(
     labels: &mut LabelMap,
     settings: &Settings,
     repository: &Repository,
-    include_remote: bool)
-    -> Result<(), String>
-  {
-
+    include_remote: bool,
+) -> Result<(), String> {
     //
     // Add branches
     // origin: fn extract_actual_branches
@@ -107,8 +109,12 @@ fn extract_branches(
 
     let mut counter: usize = 0;
     for (br, tp) in actual_branches {
-        let Some(n) = br.get().name() else { continue; };
-        let Some(t) = br.get().target() else { continue; };
+        let Some(n) = br.get().name() else {
+            continue;
+        };
+        let Some(t) = br.get().target() else {
+            continue;
+        };
 
         // Determine the starting index for slicing the branch name string.
         let start_index = match tp {
@@ -131,11 +137,8 @@ fn extract_branches(
 fn extract_tags(
     labels: &mut LabelMap,
     settings: &Settings,
-    repository: &Repository)
-    -> Result<(), String>
-  {
-
-
+    repository: &Repository,
+) -> Result<(), String> {
     // Iterate over all tags in the repository.
     let mut tags_raw = Vec::new();
     repository
@@ -148,8 +151,7 @@ fn extract_tags(
     let mut counter: usize = 0;
     for (oid, name_bytes) in tags_raw {
         // Convert tag name bytes to a UTF-8 string. Tags typically start with "refs/tags/".
-        let name = std::str::from_utf8(&name_bytes[5..])
-            .map_err(|err| err.to_string())?;
+        let name = std::str::from_utf8(&name_bytes[5..]).map_err(|err| err.to_string())?;
 
         // Resolve the target OID of the tag. It could be a tag object or directly a commit.
         let target = repository
@@ -158,7 +160,7 @@ fn extract_tags(
             .or_else(|_| // If not a tag object, try as a direct commit.
                 repository.find_commit(oid).map(|_| oid))
             .map_err(|err| err.to_string())?;
-        
+
         let oid = target.clone();
         let (term_color, svg_color) = get_term_svg_color(settings, name, counter);
         counter += 1;
@@ -170,11 +172,7 @@ fn extract_tags(
 }
 
 /// Look up colour information in settings
-fn get_term_svg_color(
-    settings: &Settings,
-    name_to_color: &str,
-    idx: usize) // Counter used to choose between alternative colors
-    -> TermSvgColor {
+fn get_term_svg_color(settings: &Settings, name_to_color: &str, idx: usize) -> TermSvgColor {
     // Copied from layout.rs
     // TODO Maybe this function should be shared?
     let term_color_str = layout::branch_color(
@@ -183,8 +181,8 @@ fn get_term_svg_color(
         &settings.branches.terminal_colors_unknown,
         idx,
     );
-    let term_color = print::colors::to_terminal_color(&term_color_str)
-        .expect("Valid terminal color string");
+    let term_color =
+        print::colors::to_terminal_color(&term_color_str).expect("Valid terminal color string");
 
     let svg_color = layout::branch_color(
         name_to_color,
