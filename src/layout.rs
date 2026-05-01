@@ -18,13 +18,6 @@ use crate::track::TrackMap;
 const ORIGIN: &str = "origin/";
 
 
-// These functions in track.rs contains references to BranchVis
-// 295: correct_fork_merges
-// 337:assign_sources_targets
-// 413:extract_actual_branches ?? has colour but not order group
-// 704:trace_branch
-// 807:asssign_branch_columns
-
 /**
     Given a range of commits in a [TrackMap] you can construct a [TrackLayout]
     which will assign columns and colours to the tracks.
