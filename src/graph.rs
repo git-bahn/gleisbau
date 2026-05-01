@@ -210,7 +210,7 @@ impl GitGraph {
         let layout = layout::layout_track_range(&tracks, all_commits, &settings)?;
 
         // Extract labels for formatting commits
-        let labels = label::list_labels(&repository, settings.include_remote)?;
+        let labels = label::list_labels(&settings, &repository)?;
 
         Ok(GitGraph {
             repository,

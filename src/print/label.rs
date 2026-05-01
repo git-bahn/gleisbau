@@ -5,11 +5,18 @@ used. This module provides add-on decoration not present in
 or [TraclLayout](crate::layout::TrackLayout).
 */
 
+// TODO The current implementation preserves the pre 0.7 term+svg color
+// which could be removed or made with Generics in a future version
+
 use std::collections::HashMap;
 
 use git2::BranchType;
 use git2::Oid;
 use git2::Repository;
+
+use crate::settings::Settings;
+use crate::layout;
+use crate::print;
 
 /// All branch- and tag-labels present
 #[derive(Default)]
@@ -22,6 +29,10 @@ pub struct LabelMap {
 pub struct Label {
     pub name: String,
     pub kind: LabelType,
+    /// The branch's terminal color (index in 256-color palette)
+    pub term_color: u8,
+    /// SVG color (name or RGB in hex annotation)
+    pub svg_color: String,
 }
 
 #[derive(Clone, Default, PartialEq)]
@@ -33,26 +44,44 @@ pub enum LabelType {
 }
 
 impl LabelMap {
-    pub fn add_label<T: Into<String>>(&mut self, oid: Oid, name: T, kind: LabelType) {
+    pub fn add_label<T: Into<String>>(
+        &mut self,
+        oid: Oid,
+        name: T,
+        kind: LabelType,
+        term_color: u8,
+        svg_color: String) 
+    {
         let name = name.into();
         let label_list = self.labels.entry(oid).or_insert(vec![]);
-        label_list.push(Label { name, kind });
+        label_list.push(Label { name, kind, term_color, svg_color });
     }
     pub fn get_labels(&self, oid: &Oid) -> Option<&Vec<Label>> {
         self.labels.get(oid)
     }
 }
 
-pub fn list_labels(repository: &Repository, include_remote: bool)
+/// Extract all branch and tag names from repo and assign colours from settings
+pub fn list_labels(settings: &Settings, repository: &Repository)
  -> Result<LabelMap, String> {
+    let include_remote = settings.include_remote;
+
     let mut labels = LabelMap::default();
-    extract_branches(&mut labels, repository, include_remote)?;
-    extract_tags(&mut labels, repository)?;
+    extract_branches(&mut labels, settings, repository, include_remote)?;
+    extract_tags(&mut labels, settings, repository)?;
     Ok(labels)
 }
 
+type TermSvgColor = (
+    // The branch's terminal color (index in 256-color palette)
+    /*pub term_color:*/ u8,
+    // SVG color (name or RGB in hex annotation)
+    /*pub svg_color:*/ String,
+);
+
 fn extract_branches(
     labels: &mut LabelMap,
+    settings: &Settings,
     repository: &Repository,
     include_remote: bool)
     -> Result<(), String>
@@ -76,6 +105,7 @@ fn extract_branches(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|err| err.message().to_string())?;
 
+    let mut counter: usize = 0;
     for (br, tp) in actual_branches {
         let Some(n) = br.get().name() else { continue; };
         let Some(t) = br.get().target() else { continue; };
@@ -90,14 +120,17 @@ fn extract_branches(
             BranchType::Local => LabelType::LocalBranch,
             BranchType::Remote => LabelType::RemoteBranch,
         };
+        let (term_color, svg_color) = get_term_svg_color(settings, name, counter);
+        counter += 1;
 
-        labels.add_label(t.clone(), name, label_type);
+        labels.add_label(t.clone(), name, label_type, term_color, svg_color);
     }
     Ok(())
 }
 
 fn extract_tags(
     labels: &mut LabelMap,
+    settings: &Settings,
     repository: &Repository)
     -> Result<(), String>
   {
@@ -112,6 +145,7 @@ fn extract_tags(
         })
         .map_err(|err| err.message().to_string())?;
 
+    let mut counter: usize = 0;
     for (oid, name_bytes) in tags_raw {
         // Convert tag name bytes to a UTF-8 string. Tags typically start with "refs/tags/".
         let name = std::str::from_utf8(&name_bytes[5..])
@@ -126,8 +160,38 @@ fn extract_tags(
             .map_err(|err| err.to_string())?;
         
         let oid = target.clone();
-        labels.add_label(oid, name, LabelType::Tag);
+        let (term_color, svg_color) = get_term_svg_color(settings, name, counter);
+        counter += 1;
+
+        labels.add_label(oid, name, LabelType::Tag, term_color, svg_color);
     }
 
     Ok(())
+}
+
+/// Look up colour information in settings
+fn get_term_svg_color(
+    settings: &Settings,
+    name_to_color: &str,
+    idx: usize) // Counter used to choose between alternative colors
+    -> TermSvgColor {
+    // Copied from layout.rs
+    // TODO Maybe this function should be shared?
+    let term_color_str = layout::branch_color(
+        name_to_color,
+        &settings.branches.terminal_colors,
+        &settings.branches.terminal_colors_unknown,
+        idx,
+    );
+    let term_color = print::colors::to_terminal_color(&term_color_str)
+        .expect("Valid terminal color string");
+
+    let svg_color = layout::branch_color(
+        name_to_color,
+        &settings.branches.svg_colors,
+        &settings.branches.svg_colors_unknown,
+        idx,
+    );
+
+    (term_color, svg_color)
 }

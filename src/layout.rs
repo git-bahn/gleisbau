@@ -380,7 +380,7 @@ fn branch_order(name: &str, order: &[Regex]) -> usize {
 }
 
 /// Finds the svg color for a branch name.
-fn branch_color<T: Clone>(
+pub fn branch_color<T: Clone>(
     name: &str,
     order: &[(Regex, Vec<T>)],
     unknown: &[T],

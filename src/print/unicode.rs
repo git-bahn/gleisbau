@@ -150,7 +150,7 @@ fn build_commit_lines_and_map<'a>(
     inserts: &HashMap<usize, Vec<Vec<Occ>>>,
     wrap_options: &Option<Options<'a>>,
 ) -> Result<(Vec<Option<String>>, Vec<usize>), String> {
-    let labels = list_labels(repository, settings.include_remote)?;
+    let labels = list_labels(settings, repository)?;
     let head_idx = tracks.indices.get(&the_head.oid);
 
     // Compute commit text into text_lines and add blank rows
