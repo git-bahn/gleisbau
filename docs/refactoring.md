@@ -2,7 +2,7 @@
 
 The 0.7.x series of gleisbau is used for a major refactoring.
 The target goal is to have the library ready for usage in [gitui](https://github.com/gitui-org/gitui),
-an interactive application with requirements for start-up time, 
+an interactive application with requirements for start-up time,
 memory usage, and rendering time. It must be possible to delegate
 long running activities to a separate thread, and at the same time
 render subsets of the graph in short time.
@@ -49,7 +49,7 @@ structures in GitGraph. A similar set of data will be provided via
 migration fuctions on GitGraph.
 
 The new process must be able to produce topology data without any geometry
-or presentation data. The first refactoring is to 
+or presentation data. The first refactoring is to
 reverse the link between BranchInfo and BranchViz.
 
 - BranchInfo will be built when traversing the graph, and must not know
@@ -67,3 +67,30 @@ TrackMap --> BranchInfo
 GitGraph --> TrackMap
 GitGraph --> BranchVis
 GitGraph --> LabelMap
+
+
+# Step: Threading
+
+The background build of topology information in TrackMap should be able
+to run until a UI thread requests access. This is because git can deliver
+many thousands of commits per second when walking the graph, and the UI
+may only render on request or perhaps 20 times per second.
+
+To achive this, we need to add an API for incremental updates of the
+topology data, and support geometry generation from partial topology
+data.
+
+There will be no thread handling included, as this can be implemented
+in many different ways.
+
+
+# Step: Backend API
+
+The backend is currently git2. Introduce a new API at the backend level
+so gix or other version systems can be used.
+
+
+# Step: Persistence (optional)
+
+For large repo the topology is expensive to fully compute. Save it to disk
+in a binary format.
