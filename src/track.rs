@@ -85,7 +85,7 @@ pub struct CommitInfo {
     /// True if commit has multiple parents
     pub is_merge: bool,
     /// Parents of commit. Filled in first pass
-    pub parents: [Option<Oid>; 2],
+    pub parents: Vec<Oid>,
     /// Children of commit. Filled in second pass
     pub children: Vec<Oid>,
     /// Index into TrackMap.all_branches
@@ -97,7 +97,7 @@ impl CommitInfo {
         CommitInfo {
             oid: commit.id(),
             is_merge: commit.parent_count() > 1,
-            parents: [commit.parent_id(0).ok(), commit.parent_id(1).ok()],
+            parents: commit.parent_ids().collect(),
             children: Vec::new(),
             branch_trace: None,
         }
@@ -191,10 +191,10 @@ pub fn assign_children(commits: &mut [CommitInfo], indices: &HashMap<Oid, usize>
     for idx in 0..commits.len() {
         let (oid, parents) = {
             let info = &commits[idx];
-            (info.oid, info.parents)
+            (info.oid, info.parents.clone())
         };
-        for par_oid in &parents {
-            if let Some(par_idx) = par_oid.and_then(|oid| indices.get(&oid)) {
+        for par_oid in parents {
+            if let Some(par_idx) = indices.get(&par_oid) {
                 commits[*par_idx].children.push(oid);
             }
         }
@@ -305,7 +305,7 @@ pub fn assign_sources_targets(
 
     // 2. Identify Source Branches (where did this branch fork FROM?)
     for info in commits {
-        for par_oid in info.parents.iter().flatten() {
+        for par_oid in info.parents.iter() {
             if let Some(par_info) = indices.get(par_oid).and_then(|&i| commits.get(i)) {
                 // If the parent is on a different branch trace, that's our source
                 if par_info.branch_trace != info.branch_trace {
