@@ -18,6 +18,7 @@
 //! merges (multiple parents), and show the remaining parent relations.
 
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -51,15 +52,15 @@ pub struct GitGraph {
 /** Builder of a GitGraph struct. This handles one-time processing of the
 repository. */
 #[derive(Default)]
-pub struct Builder<'a> {
+pub struct Builder {
     repository: Option<Repository>,
-    settings: Option<&'a Settings>,
+    settings: Option<Rc<Settings>>,
     start_point: Option<String>,
     max_count: Option<usize>,
     refspecs: Vec<String>,
 }
 
-impl<'a> Builder<'a> {
+impl Builder {
     pub fn new() -> Self {
         Builder::default()
     }
@@ -67,7 +68,7 @@ impl<'a> Builder<'a> {
         self.repository = Some(repository);
         self
     }
-    pub fn with_settings(mut self, settings: &'a Settings) -> Self {
+    pub fn with_settings(mut self, settings: Rc<Settings>) -> Self {
         self.settings = Some(settings);
         self
     }
@@ -86,7 +87,7 @@ impl<'a> Builder<'a> {
     pub fn build(self) -> Result<GitGraph, String> {
         GitGraph::new(
             self.repository.expect("You must specify repository"),
-            self.settings.expect("You must specify settings"),
+            &self.settings.expect("You must specify settings"),
             self.start_point,
             self.max_count,
             self.refspecs,

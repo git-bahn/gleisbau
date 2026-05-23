@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Changed
+
+- (BREAKING) Builder::with_settings now take Rc<Settings> as argument.
+
 ### Fixed
 
 - Support for octo-merges (more than 2 parents)
