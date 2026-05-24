@@ -19,6 +19,7 @@ pub mod layout;
 pub mod print;
 pub mod settings;
 pub mod track;
+pub mod u32_index;
 
 // Documentation only module,
 // see https://rustprojectprimer.com/documentation/rustdoc.html
