@@ -11,11 +11,11 @@ use std::ops::Range;
 
 use regex::Regex;
 
+use crate::backend::git2::BranchInfo;
+use crate::backend::git2::TrackMap;
 use crate::print::colors::to_terminal_color;
 use crate::settings::BranchOrder;
 use crate::settings::Settings;
-use crate::track::BranchInfo;
-use crate::track::TrackMap;
 
 const ORIGIN: &str = "origin/";
 

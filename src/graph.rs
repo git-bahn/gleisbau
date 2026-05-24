@@ -22,17 +22,17 @@ use std::rc::Rc;
 
 pub use git2::{BranchType, Commit, Error, Oid, Reference, Repository};
 
+use crate::backend;
 use crate::layout;
 use crate::print::label;
 use crate::settings::Settings;
-use crate::track;
 
+pub use crate::backend::git2::BranchInfo;
+pub use crate::backend::git2::CommitInfo;
+pub use crate::backend::git2::TrackMap;
 pub use crate::layout::BranchVis;
 pub use crate::layout::TrackLayout;
 pub use crate::print::label::LabelMap;
-pub use crate::track::BranchInfo;
-pub use crate::track::CommitInfo;
-pub use crate::track::TrackMap;
 
 /// Represents a git history graph.
 pub struct GitGraph {
@@ -122,7 +122,7 @@ impl GitGraph {
         walk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
             .map_err(|err| err.message().to_string())?;
 
-        track::configure_revwalk(
+        backend::git2::configure_revwalk(
             &repository,
             &mut walk,
             start_point,
@@ -151,19 +151,19 @@ impl GitGraph {
                 if !stashes.contains(&oid) {
                     let commit = repository.find_commit(oid).unwrap();
 
-                    commits.push(CommitInfo::new(&commit));
+                    commits.push(backend::git2::commit_info_new(&commit));
                     indices.insert(oid, idx);
                     idx += 1;
                 }
             }
         }
 
-        track::assign_children(&mut commits, &indices);
+        backend::git2::assign_children(&mut commits, &indices);
 
         let mut all_branches =
-            track::assign_branches(&repository, &mut commits, &indices, settings)?;
-        track::correct_fork_merges(&commits, &indices, &mut all_branches)?;
-        track::assign_sources_targets(&commits, &indices, &mut all_branches);
+            backend::git2::assign_branches(&repository, &mut commits, &indices, settings)?;
+        backend::git2::correct_fork_merges(&commits, &indices, &mut all_branches)?;
+        backend::git2::assign_sources_targets(&commits, &indices, &mut all_branches);
 
         let (filtered_commits, filtered_indices) =
             remove_commits_not_on_a_branch(commits, indices, &mut all_branches);

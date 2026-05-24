@@ -11,6 +11,7 @@ use itertools::Itertools;
 use textwrap::Options;
 use yansi::Paint;
 
+use crate::backend::git2::TrackMap;
 use crate::graph::{BranchInfo, CommitInfo, GitGraph, HeadInfo};
 use crate::layout::BranchVis;
 use crate::layout::TrackLayout;
@@ -20,7 +21,6 @@ use crate::print::label::Label;
 use crate::print::label::LabelMap;
 use crate::print::label::LabelType;
 use crate::settings::{Characters, Settings};
-use crate::track::TrackMap;
 
 // Symbols used in [Grid]
 
