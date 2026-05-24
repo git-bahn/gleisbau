@@ -13,12 +13,18 @@ use regex::Regex;
 
 use crate::backend::git2::BranchInfo;
 use crate::backend::git2::TrackMap;
+use crate::define_u32_index;
 use crate::print::colors::to_terminal_color;
 use crate::settings::BranchOrder;
 use crate::settings::Settings;
 use crate::track::Binx;
 
 const ORIGIN: &str = "origin/";
+
+define_u32_index!(
+    /// Index into [TrackLayout].branch_visual
+    pub struct Vinx;
+);
 
 /**
     Given a range of commits in a [TrackMap] you can construct a [TrackLayout]
@@ -28,7 +34,7 @@ pub struct TrackLayout {
     // Specifies which commits are rendered
     source: Range<usize>,
     // Map a TrackMap.branch index to a TrackLayout.branch_visual index
-    track_visual: HashMap<Binx, usize>,
+    track_visual: HashMap<Binx, Vinx>,
     // Visuals for all tracks in the rendered range
     branch_visual: Vec<BranchVis>,
 }
@@ -41,7 +47,7 @@ impl TrackLayout {
     pub fn track_visual(&self, track_inx: Binx) -> Option<&BranchVis> {
         self.track_visual
             .get(&track_inx)
-            .and_then(|&bv_idx| self.branch_visual.get(bv_idx))
+            .and_then(|&bv_idx| self.branch_visual.get(bv_idx.index()))
     }
     pub fn track_visual_vec(&self) -> &Vec<BranchVis> {
         &self.branch_visual
@@ -112,7 +118,7 @@ pub fn layout_track_range(
             let visual_data =
                 create_branch_visual(color_counter, branch_info, track_map, settings)?;
 
-            let vis_idx = branch_visuals.len();
+            let vis_idx = Vinx::new(branch_visuals.len());
             branch_visuals.push(visual_data);
             e.insert(vis_idx);
         }
@@ -249,7 +255,7 @@ fn create_branch_visual(
 }
 
 // Keys used to sort branches when assigning columns
-type BranchSort = Vec<(Binx, usize, usize, usize, usize, usize)>;
+type BranchSort = Vec<(Binx, Vinx, usize, usize, usize, usize)>;
 
 /// Sorts branches into columns for visualization, that all branches can be
 /// visualizes linearly and without overlaps. Uses Shortest-First scheduling.
@@ -382,7 +388,7 @@ fn finalize_absolute_columns(branch_visual_list: &mut Vec<BranchVis>, occupied: 
 }
 
 /// Helper: Determines if a branch prefers to be on the right side of its group
-fn should_align_right(branch: &BranchInfo, v_idx: usize, layout: &TrackLayout) -> bool {
+fn should_align_right(branch: &BranchInfo, v_idx: Vinx, layout: &TrackLayout) -> bool {
     let this_group = layout.branch_visual[v_idx].order_group;
 
     let source_to_right = branch
