@@ -35,6 +35,7 @@ pub use crate::layout::TrackLayout;
 pub use crate::print::label::LabelMap;
 
 /// Represents a git history graph.
+/// Legacy API, will be deprecated.
 pub struct GitGraph {
     pub repository: Repository,
     /// Track structure

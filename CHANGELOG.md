@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (BREAKING) Builder::with_settings now take Rc<Settings> as argument.
 
+### Deprecated
+
+- GitGraph will be deprecated in some future release.
+
 ### Removed
 
 - Mutex on GitGraph.track
