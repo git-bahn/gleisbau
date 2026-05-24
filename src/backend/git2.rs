@@ -11,6 +11,7 @@ use git2::Repository;
 
 use crate::settings::Settings;
 use crate::track::parse_merge_summary;
+use crate::track::Binx;
 use crate::track::BranchInfo as AbstractBranchInfo;
 use crate::track::CommitInfo as AbstractCommitInfo;
 use crate::track::TrackMap as AbstractTrackMap;
@@ -153,7 +154,8 @@ pub fn assign_branches(
     // The branch-order set by [extract_branches] determines which branch will
     // be first to claim their desired commits.
     let index_map: Vec<_> = (0..branches.len())
-        .map(|old_idx| {
+        .map(|old_idx_usize| {
+            let old_idx = Binx::new(old_idx_usize);
             if let Some(&idx) = &indices.get(&branches[old_idx].target) {
                 let info = &mut commits[idx];
                 let oid = info.oid;
@@ -166,7 +168,7 @@ pub fn assign_branches(
                 // you must use module label.rs instead.
                 if any_assigned {
                     branch_idx += 1;
-                    Some(branch_idx - 1)
+                    Some(Binx::new(branch_idx - 1))
                 } else {
                     None
                 }
@@ -209,7 +211,7 @@ pub fn correct_fork_merges(
             .and_then(|oid| indices.get(&oid))
             .and_then(|idx| commits.get(*idx))
             .and_then(|info| info.branch_trace)
-            .and_then(|trace| branches.get(trace))
+            .and_then(|trace| branches.get(trace.index()))
         {
             if branches[idx].name == merge_target.name {
                 branches[idx].name = format!("{}{}", FORK, branches[idx].name);
@@ -504,7 +506,7 @@ pub fn trace_branch(
     indices: &HashMap<Oid, usize>,
     branches: &mut [BranchInfo],
     oid: Oid,
-    branch_index: usize,
+    branch_index: Binx,
 ) -> Result<bool, Error> {
     let mut curr_oid = oid;
     let mut prev_index: Option<usize> = None;

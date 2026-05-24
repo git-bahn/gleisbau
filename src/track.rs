@@ -8,10 +8,21 @@ use std::collections::HashMap;
 
 use regex::Regex;
 
+use crate::define_u32_index;
 use crate::settings::MergePatterns;
 
 const ORIGIN: &str = "origin/";
 pub const FORK: &str = "fork/";
+
+define_u32_index!(
+    /** Index into [TrackMap].all_branches.
+
+    This index is 4 bytes instead of 8 bytes for normal usize.
+    We store an index to a commit 3 times in [CommitInfo].
+    For a repository with N commits, this will save 4 * 3 * N bytes of memory
+    */
+    pub struct Binx;
+);
 
 /**
     Group commits into tracks. A track is a sequence of commits
@@ -35,8 +46,8 @@ pub struct BranchInfo<Oid> {
     /// The Object ID that the branch/tag points at. Used as the grand-child to start tracing the branch towards grand-parent.
     pub target: Oid,
     pub merge_target: Option<Oid>,
-    pub source_branch: Option<usize>,
-    pub target_branch: Option<usize>,
+    pub source_branch: Option<Binx>,
+    pub target_branch: Option<Binx>,
     /// Name of branch. Either the branch/tag name, or derived from a merge-commit message.
     pub name: String,
     /// When two branches want the same commit, the one that is most persistent wins. In this case lower numbers wins.
@@ -87,8 +98,12 @@ pub struct CommitInfo<Oid> {
     /// Children of commit. Filled in second pass
     pub children: Vec<Oid>,
     /// Index into TrackMap.all_branches
-    pub branch_trace: Option<usize>,
+    pub branch_trace: Option<Binx>,
 }
+
+//
+//  Generic functions not tied to a particular struct
+//
 
 /// Finds the index for a branch name from a slice of prefixes
 pub fn branch_order(name: &str, order: &[Regex]) -> usize {

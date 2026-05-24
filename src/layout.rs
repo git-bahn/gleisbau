@@ -16,6 +16,7 @@ use crate::backend::git2::TrackMap;
 use crate::print::colors::to_terminal_color;
 use crate::settings::BranchOrder;
 use crate::settings::Settings;
+use crate::track::Binx;
 
 const ORIGIN: &str = "origin/";
 
@@ -27,7 +28,7 @@ pub struct TrackLayout {
     // Specifies which commits are rendered
     source: Range<usize>,
     // Map a TrackMap.branch index to a TrackLayout.branch_visual index
-    track_visual: HashMap<usize, usize>,
+    track_visual: HashMap<Binx, usize>,
     // Visuals for all tracks in the rendered range
     branch_visual: Vec<BranchVis>,
 }
@@ -37,7 +38,7 @@ impl TrackLayout {
     pub fn iter_commit_index(&self) -> impl Iterator<Item = usize> {
         self.source.clone()
     }
-    pub fn track_visual(&self, track_inx: usize) -> Option<&BranchVis> {
+    pub fn track_visual(&self, track_inx: Binx) -> Option<&BranchVis> {
         self.track_visual
             .get(&track_inx)
             .and_then(|&bv_idx| self.branch_visual.get(bv_idx))
@@ -248,7 +249,7 @@ fn create_branch_visual(
 }
 
 // Keys used to sort branches when assigning columns
-type BranchSort = Vec<(usize, usize, usize, usize, usize, usize)>;
+type BranchSort = Vec<(Binx, usize, usize, usize, usize, usize)>;
 
 /// Sorts branches into columns for visualization, that all branches can be
 /// visualizes linearly and without overlaps. Uses Shortest-First scheduling.
