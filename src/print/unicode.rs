@@ -72,7 +72,7 @@ pub type UnicodeGraphInfo = (Vec<String>, Vec<String>, Vec<usize>);
 /// Creates a text-based visual representation of a graph.
 pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGraphInfo, String> {
     let repo = &graph.repository;
-    let tracks = graph.tracks.lock().unwrap();
+    let tracks = &graph.tracks;
     let layout = &graph.layout;
 
     if tracks.all_branches.is_empty() {

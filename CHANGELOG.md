@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (BREAKING) Builder::with_settings now take Rc<Settings> as argument.
 
+### Removed
+
+- Mutex on GitGraph.track
+
 ### Fixed
 
 - Support for octo-merges (more than 2 parents)

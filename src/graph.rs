@@ -19,8 +19,6 @@
 
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 pub use git2::{BranchType, Commit, Error, Oid, Reference, Repository};
 
@@ -39,8 +37,8 @@ pub use crate::track::TrackMap;
 /// Represents a git history graph.
 pub struct GitGraph {
     pub repository: Repository,
-    /// Track structure, may be updated by a separate thread
-    pub tracks: Arc<Mutex<TrackMap>>,
+    /// Track structure
+    pub tracks: TrackMap,
     /// Layout of all commits in track structure
     pub layout: TrackLayout,
     /// Labels to show next to commits
@@ -185,7 +183,7 @@ impl GitGraph {
 
         Ok(GitGraph {
             repository,
-            tracks: Arc::new(Mutex::new(tracks)),
+            tracks,
             layout,
             labels,
             head,
