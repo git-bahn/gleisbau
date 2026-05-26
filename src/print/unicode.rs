@@ -259,7 +259,7 @@ fn draw_graph_lines(
         grid.set(
             column * 2,
             idx_map,
-            if info.is_merge { CIRCLE } else { DOT },
+            if info.is_merge() { CIRCLE } else { DOT },
             branch_visual.term_color,
             branch.persistence,
         );
@@ -322,7 +322,7 @@ fn draw_parent_lines(
             .expect("Parent must have visuals");
         let par_column = par_branch_visual.column.unwrap();
 
-        let (color, pers) = if info.is_merge {
+        let (color, pers) = if info.is_merge() {
             (par_branch_visual.term_color, par_branch.persistence)
         } else {
             (branch_color, branch.persistence)
@@ -338,7 +338,7 @@ fn draw_parent_lines(
             let insert_idx = find_insert_idx(&inserts[&split_index], idx, *par_idx).unwrap();
             let idx_split = split_idx_map + insert_idx;
 
-            let is_secondary_merge = info.is_merge && p > 0;
+            let is_secondary_merge = info.is_merge() && p > 0;
 
             let row123 = (idx_map, idx_split, par_idx_map);
             let col12 = (column, par_column);
@@ -713,7 +713,7 @@ fn get_inserts(
                                                     // for merge commits (specifically the second parent) to keep the
                                                     // graph tighter.
                                                     if !compact
-                                                        || !info.is_merge
+                                                        || !info.is_merge()
                                                         || idx != *target_index
                                                         || p == 0
                                                     {
@@ -826,7 +826,7 @@ fn get_deviate_index(
 
     // TODO: in cases where no crossings occur, the rule for merge commits can also be applied to normal commits
     // See also branch::trace_branch()
-    if info.is_merge {
+    if info.is_merge() {
         max(index, min_split_idx)
     } else {
         (par_index as i32 - 1) as usize

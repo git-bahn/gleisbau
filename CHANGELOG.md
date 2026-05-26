@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (BREAKING) Builder::with_settings now take Rc<Settings> as argument.
 - (BREAKING) TrackLayout::track_visual now take Binx as argument
+- (BREAKING) CommitInfo::is_merge is now a function.
 
 ### Deprecated
 

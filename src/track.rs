@@ -91,14 +91,18 @@ impl<Oid> BranchInfo<Oid> {
 pub struct CommitInfo<Oid> {
     /// Commit object identifier from git2
     pub oid: Oid,
-    /// True if commit has multiple parents
-    pub is_merge: bool,
     /// Parents of commit. Filled in first pass
     pub parents: Vec<Oid>,
     /// Children of commit. Filled in second pass
     pub children: Vec<Oid>,
     /// Index into TrackMap.all_branches
     pub branch_trace: Option<Binx>,
+}
+impl<Oid> CommitInfo<Oid> {
+    /// True if commit has multiple parents
+    pub fn is_merge(&self) -> bool {
+        self.parents.len() > 1
+    }
 }
 
 //

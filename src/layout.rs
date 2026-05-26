@@ -198,7 +198,7 @@ pub fn get_deviate_index(
 
     // TODO: in cases where no crossings occur, the rule for merge commits can also be applied to normal commits
     // See also branch::trace_branch()
-    if info.is_merge {
+    if info.is_merge() {
         max(index, min_split_idx)
     } else {
         (par_index as i32 - 1) as usize

@@ -25,7 +25,6 @@ pub type TrackMap = AbstractTrackMap<Oid>;
 pub fn commit_info_new(commit: &Commit) -> CommitInfo {
     CommitInfo {
         oid: commit.id(),
-        is_merge: commit.parent_count() > 1,
         parents: commit.parent_ids().collect(),
         children: Vec::new(),
         branch_trace: None,
@@ -576,7 +575,7 @@ fn determine_start_index(
     match prev_index {
         None => Some(*index as i32 - 1),
         Some(p_idx) => {
-            if commits[p_idx].is_merge {
+            if commits[p_idx].is_merge() {
                 let mut temp_index = p_idx;
                 for sibling_oid in &commits[*index].children {
                     if sibling_oid != curr_oid {
