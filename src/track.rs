@@ -4,7 +4,10 @@ It is expensive to compute because changes in one end may affect the other end.
 Fortunately it can be computed incrementally.
 */
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::rc::Rc;
 
 use regex::Regex;
 
@@ -39,6 +42,18 @@ where
     pub indices: HashMap<Oid, usize>,
     /// All detected branches and tags, including merged and deleted
     pub all_branches: Vec<BranchInfo<Oid>>,
+}
+
+impl<Oid: Clone + Eq + Hash> TrackMap<Oid> {
+    /// Append a commit and return the index it got.
+    /// Does not deal with branch information.
+    pub fn add_commit(&mut self, commit: CommitInfo<Oid>) -> usize {
+        let commit_index = self.commits.len();
+        self.indices.insert(commit.oid.clone(), commit_index);
+        self.commits.push(commit);
+        // Make sure every child has a branch
+        commit_index
+    }
 }
 
 /// Gleisbau branch come in several variants, that indicate their origin
@@ -115,6 +130,52 @@ impl<Oid> CommitInfo<Oid> {
     /// True if commit has multiple parents
     pub fn is_merge(&self) -> bool {
         self.parents.len() > 1
+    }
+}
+
+/**
+    Add repository commit information to a [TrackMap].
+
+    This struct is ment to be temporary. Once the repository has been walked
+    it can be discarded. It holds information about commit ids that have not
+    yet been processed. Once they are available it will update the previously
+    seen commits in TrackMap with the missing relations.
+
+    The curent implementation assumes that commits are only added
+    during a full repository walk from newest to oldest commit.
+    This means that children are always added before their parents.
+    This assumption reduces the amount of memory needed for building.
+*/
+pub struct Builder<Oid>
+    where Oid: Clone + Eq + Hash
+{
+    /// Track structure to update
+    tracks: Rc<RefCell<TrackMap<Oid>>>,
+}
+impl<Oid> Builder<Oid> 
+    where Oid: Clone + Eq + Hash 
+{
+    /// Create a builder for the specified TrackMap
+    pub fn new(target: Rc<RefCell<TrackMap<Oid>>>) -> Self {
+        Self {
+            tracks: target.clone(),
+        }
+    }
+    /// Add a commit to the TrackMap.
+    /// When a missing parent is added, create the missing relations.
+    pub fn add_commit(&mut self, id: Oid, parents: Vec<Oid>) {
+
+        // TODO Expand existing track to this commit or create a new track
+        let track = Binx(0); // BUG - should be computed properly. This is only to make it compile
+
+        // Find parents
+        let ci = CommitInfo {
+            oid: id,
+            parents,
+            children: vec![],
+            branch_trace: Some(track),
+        };
+        self.tracks.borrow_mut().add_commit(ci);
     }
 }
 
