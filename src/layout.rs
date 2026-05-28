@@ -27,8 +27,9 @@ define_u32_index!(
 );
 
 /**
-    Given a range of commits in a [TrackMap] you can construct a [TrackLayout]
-    which will assign columns and colours to the tracks.
+    A layout of tracks assigns columns and colours to them.
+
+    Use [layout_track_range] to construct a [TrackLayout]
 */
 pub struct TrackLayout {
     // Specifies which commits are rendered
@@ -82,8 +83,12 @@ impl BranchVis {
         }
     }
 }
-/// Generates a TrackLayout by extracting and calculating visual data for
-/// branches active within a specific commit range.
+/**
+    Construct a [TrackLayout] from a range of commits in a [TrackMap].
+
+    This will assign columns and colours to the tracks and store that
+    information in the layout.
+*/
 pub fn layout_track_range(
     track_map: &TrackMap,
     range: Range<usize>,
@@ -311,7 +316,7 @@ pub fn assign_branch_columns(
     finalize_absolute_columns(&mut layout.branch_visual, occupied);
 }
 
-// For each order group, for each column inside that group, trach which rows are occupied.
+// For each order group, for each column inside that group, trace which rows are occupied.
 // occupied[group_idx][column_idx] = Vec<(start_commit_idx, end_commit_idx)>
 type Occupation = Vec<Vec<Vec<(usize, usize)>>>;
 
