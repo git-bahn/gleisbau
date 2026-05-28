@@ -43,8 +43,20 @@ where
     /// All detected branches and tags, including merged and deleted
     pub all_branches: Vec<BranchInfo<Oid>>,
 }
-
+impl<Oid: Clone + Eq + Hash> Default for TrackMap<Oid> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl<Oid: Clone + Eq + Hash> TrackMap<Oid> {
+    /// Create an empty TrackMap
+    pub fn new() -> Self {
+        Self {
+            commits: vec![],
+            indices: HashMap::new(),
+            all_branches: vec![],
+        }
+    }
     /// Append a commit and return the index it got.
     /// Does not deal with branch information.
     pub fn add_commit(&mut self, commit: CommitInfo<Oid>) -> usize {
