@@ -45,6 +45,10 @@ impl TrackLayout {
     pub fn iter_commit_index(&self) -> impl Iterator<Item = usize> {
         self.source.clone()
     }
+    /// First index into TrackMap in this layout
+    pub fn commit_index_start(&self) -> usize {
+        self.source.start
+    }
     pub fn track_visual(&self, track_inx: Binx) -> Option<&BranchVis> {
         self.track_visual
             .get(&track_inx)
@@ -52,6 +56,9 @@ impl TrackLayout {
     }
     pub fn track_visual_vec(&self) -> &Vec<BranchVis> {
         &self.branch_visual
+    }
+    pub fn commit_count(&self) -> usize {
+        self.source.len()
     }
 }
 

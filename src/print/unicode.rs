@@ -217,6 +217,49 @@ fn build_commit_lines_and_map(
     Ok((text_lines, index_map))
 }
 
+/// Iterates through commits to compute the index map.
+fn build_commit_map(
+    layout: &TrackLayout,
+    inserts: &HashMap<usize, Vec<Vec<Occ>>>, // graphical extra lines
+    commit_height: &[usize],                 // text lines required
+) -> Result<Vec<usize>, String> {
+    // Compute commit index to output row map
+    let mut index_map = vec![];
+    let mut offset = 0;
+
+    for idx in layout.iter_commit_index() {
+        index_map.push(idx + offset);
+
+        // Calculate needed graph inserts (for ranges only)
+        let cnt_inserts = if let Some(inserts) = inserts.get(&idx) {
+            inserts
+                .iter()
+                .filter(|vec| {
+                    vec.iter().all(|occ| match occ {
+                        Occ::Commit(_, _) => false,
+                        Occ::Range(_, _, _, _) => true,
+                    })
+                })
+                .count()
+        } else {
+            0
+        };
+
+        // Calculate needed text inserts
+        let commit_height_index = idx - layout.commit_index_start();
+        let num_lines = commit_height
+            .get(commit_height_index)
+            .unwrap_or(&1)
+            .saturating_sub(1);
+
+        // Make room for the largest number of inserts
+        let max_inserts = max(cnt_inserts, num_lines);
+        offset += max_inserts;
+    }
+
+    Ok(index_map)
+}
+
 /// Initializes the grid and draws all commit/branch connections.
 ///
 /// # Arguments
@@ -227,7 +270,7 @@ fn draw_graph_lines(
     layout: &TrackLayout,
     num_cols: usize,
     inserts: &HashMap<usize, Vec<Vec<Occ>>>,
-    index_map: &[usize],
+    index_map: &[usize], // map commit index to row
     total_rows: usize,
 ) -> Grid {
     let mut grid = Grid::new(
@@ -868,10 +911,121 @@ fn get_deviate_index(
     }
 }
 
+//
+//  Graph only printing from TrackMap
+//
+
 /** Print a graph as lines for a terminal
+# Arguments
+- settings
+- tracks
+- layout
+- commit_text_height : a text height for each commit in the layout.
+  If a commit has height > 1 then extra graph lines will be added
+  to match this. The grapy may determine that a commit require two
+  lines, even though the commit_text only asked for 1.
+# Returns
+  [GraphLines], which is a list of graph output and the output row where
+  a specific row starts.
 */
-pub fn print_graph_terminal() {
-    todo!();
+pub fn print_graph_terminal(
+    settings: &Settings,
+    tracks: &TrackMap,
+    layout: &TrackLayout,
+    commit_text_height: &[usize], // [0] corresponds to track commit layout.commit_index_start()
+) -> GraphLines {
+    if tracks.all_branches.is_empty() {
+        return GraphLines::empty();
+    }
+
+    // inserts are extra lines needed when the layout cannot be drawn on
+    // a single line. They influence the number of rows needed
+    let inserts = get_inserts(tracks, layout, settings.compact);
+
+    // The index map gives the row number from a commit index, relative
+    // to layout.commit_index_start()
+    let index_map =
+        build_commit_map(layout, &inserts, commit_text_height).expect("valid commit_text_height");
+
+    // Compute grid size
+    let num_cols = calculate_graph_dimensions(layout);
+    let min_row_height = 1;
+    let rows_without_commit_text = layout
+        .commit_count()
+        .saturating_sub(commit_text_height.len());
+    let total_rows = commit_text_height
+        .iter()
+        .map(|&x| max(min_row_height, x))
+        .take(layout.commit_count())
+        .sum::<usize>()
+        + rows_without_commit_text * min_row_height;
+
+    // Draw graph as lines on a grid
+    let mut grid = draw_graph_lines(
+        settings, tracks, layout, num_cols, &inserts, &index_map, total_rows,
+    );
+
+    // Handle reverse order
+    if settings.reverse_commit_order {
+        grid.reverse();
+    }
+
+    // 6. Final printing and result
+    let lines = grid_print_terminal(&settings.characters, &grid, settings.colored);
+
+    GraphLines {
+        graph_lines: lines,
+        commit2line: index_map,
+    }
+}
+
+/// Printed lines of graph along with he commit index
+pub struct GraphLines {
+    /// The graph printed as lines
+    pub graph_lines: Vec<String>,
+    /// Map from commit index in [TrackLayout] to line number in 'graph_lines'.
+    /// To find the commit index in [TrackMap] add [TrackLayout::commit_index_start].
+    pub commit2line: Vec<usize>,
+}
+
+impl GraphLines {
+    pub fn empty() -> Self {
+        Self {
+            graph_lines: vec![],
+            commit2line: vec![],
+        }
+    }
+}
+
+/// Print a grid as ansi coloured strings. Optionally removing colour.
+/// Grid uses symbols, they are rendered according to the provided
+/// Characters map.
+fn grid_print_terminal(characters: &Characters, grid: &Grid, color: bool) -> Vec<String> {
+    let mut g_lines = vec![];
+
+    let cell2string = |cell: &GridCell| -> String {
+        if color {
+            let chars = cell.char(characters);
+            if cell.character == SPACE {
+                chars.to_string()
+            } else {
+                chars.to_string().fixed(cell.color).to_string()
+            }
+        } else {
+            cell.char(characters).to_string()
+        }
+    };
+
+    for row in grid.data.chunks(grid.width) {
+        let mut g_out = String::new();
+
+        let str = row.iter().map(&cell2string).collect::<String>();
+        write!(g_out, "{}", str).unwrap();
+
+        g_lines.push(g_out);
+    }
+
+    g_lines
 }
 
 /// Creates the complete graph visualization, incl. formatter commits.
