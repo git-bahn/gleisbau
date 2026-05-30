@@ -108,7 +108,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
     }
 
     // 6. Final printing and result
-    let lines = print_graph(&settings.characters, &grid, text_lines, settings.colored);
+    let lines = print_graph_and_text(&settings.characters, &grid, text_lines, settings.colored);
 
     Ok((lines.0, lines.1, index_map))
 }
@@ -834,7 +834,7 @@ pub fn print_graph_terminal() {
 }
 
 /// Creates the complete graph visualization, incl. formatter commits.
-fn print_graph(
+fn print_graph_and_text(
     characters: &Characters,
     grid: &Grid,
     text_lines: Vec<Option<String>>,
