@@ -83,24 +83,15 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
     let num_cols = calculate_graph_dimensions(&graph.layout);
     let inserts = get_inserts(tracks, layout, settings.compact);
 
-    let (indent1, indent2) = if let Some((_, ind1, ind2)) = settings.wrapping {
-        (" ".repeat(ind1.unwrap_or(0)), " ".repeat(ind2.unwrap_or(0)))
-    } else {
-        ("".to_string(), "".to_string())
-    };
-
-    // 2. Prepare wrapping for commit text (using references to the new indent strings)
-    let wrap_options = get_wrapping_options(settings, num_cols, &indent1, &indent2)?;
-
     // 3. Compute commit text and index map
     let (mut text_lines, index_map) = build_commit_lines_and_map(
         settings,
         repo,
         tracks,
         layout,
+        num_cols,
         &graph.head,
         &inserts,
-        &wrap_options,
     )?;
 
     // 4. Calculate total rows and initialize/draw the grid
@@ -133,32 +124,35 @@ fn calculate_graph_dimensions(layout: &TrackLayout) -> usize {
     2 * max_column + 1
 }
 
-/// Prepares wrapping options, returning the options structure.
-// 'a now refers to the lifetime of the indent strings passed in.
-fn get_wrapping_options<'a>(
-    settings: &Settings,
-    num_cols: usize,
-    indent1: &'a str, // Takes reference to owned string
-    indent2: &'a str, // Takes reference to owned string
-) -> Result<Option<Options<'a>>, String> {
-    if let Some((width, _, _)) = settings.wrapping {
-        // We now pass the references directly to create_wrapping_options
-        create_wrapping_options(width, indent1, indent2, num_cols + 4)
-    } else {
-        Ok(None)
-    }
-}
-
 /// Iterates through commits to compute text lines, blank line inserts, and the index map.
-fn build_commit_lines_and_map<'a>(
+fn build_commit_lines_and_map(
     settings: &Settings,
     repository: &Repository,
     tracks: &TrackMap,
     layout: &TrackLayout,
+    num_cols: usize,
     the_head: &HeadInfo,
     inserts: &HashMap<usize, Vec<Vec<Occ>>>,
-    wrap_options: &Option<Options<'a>>,
 ) -> Result<(Vec<Option<String>>, Vec<usize>), String> {
+    // Compute textwrap options
+    let indent1 = settings
+        .wrapping
+        .map(|(_, ind1, _)| " ".repeat(ind1.unwrap_or(0)));
+    let indent2 = settings
+        .wrapping
+        .map(|(_, _, ind2)| " ".repeat(ind2.unwrap_or(0)));
+    let wrap_options_owned: Option<Options> = settings.wrapping
+        .map(|(width, _, _)| {
+            let indent1 = indent1.as_ref().unwrap();
+            let indent2 = indent2.as_ref().unwrap();
+            create_wrapping_options(width, indent1, indent2, num_cols + 4)
+        })
+        .transpose()? // Return if we got an Err
+        .flatten() // reduce OptionOption to Option
+    ;
+    let wrap_options: &Option<Options> = &wrap_options_owned;
+
+    // Compute decorating labels
     let labels = list_labels(settings, repository)?;
     let head_idx = tracks.indices.get(&the_head.oid);
 
