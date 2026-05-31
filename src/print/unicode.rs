@@ -695,37 +695,15 @@ fn get_inserts(
                                 // where the new range doesn't overlap with existing occupations.
                                 let mut insert_at = entry.get().len();
                                 for (insert_idx, sub_entry) in entry.get().iter().enumerate() {
-                                    let mut occ = false;
-                                    // Check for overlaps with existing `Occ` in the current row.
-                                    for other_range in sub_entry {
-                                        // Check if the current column range overlaps with the other range.
-                                        if other_range.overlaps(&column_range) {
-                                            match other_range {
-                                                // If the other occupation is a commit.
-                                                Occ::Commit(target_index, _) => {
-                                                    // In compact mode, we might allow overlap with the commit itself
-                                                    // for merge commits (specifically the second parent) to keep the
-                                                    // graph tighter.
-                                                    if !compact
-                                                        || !info.is_merge()
-                                                        || idx != *target_index
-                                                        || p == 0
-                                                    {
-                                                        occ = true;
-                                                        break;
-                                                    }
-                                                }
-                                                // If the other occupation is a range (another connection).
-                                                Occ::Range(o_idx, o_par_idx, _, _) => {
-                                                    // Avoid overlap with connections between the same commits.
-                                                    if idx != *o_idx && par_idx != o_par_idx {
-                                                        occ = true;
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                                    let occ = has_overlap(
+                                        sub_entry,
+                                        column_range,
+                                        compact,
+                                        info.is_merge(),
+                                        idx,
+                                        p,
+                                        par_idx,
+                                    );
                                     // If no overlap is found in this row, we can insert here.
                                     if !occ {
                                         insert_at = insert_idx;
@@ -771,6 +749,66 @@ fn get_inserts(
 
     // Return the map of required insertions.
     inserts
+}
+
+/// Checks if a proposed horizontal connection (range) overlaps or conflicts with
+/// existing elements in a specific layout row.
+///
+/// In standard layout modes, any overlap with an existing commit or an existing
+/// connection range constitutes a conflict. However, in `compact` mode, an overlap
+/// with a commit is permitted if the current commit is a merge commit and the connection
+/// belongs to its second (or subsequent) parent. Overlaps between the exact same
+/// commit-to-parent connection paths are also ignored to prevent redundant blocking.
+///
+/// # Arguments
+///
+/// * `sub_entry` - The current row of visual elements (`Occ`) to check against.
+/// * `column_range` - A tuple `(min_col, max_col)` representing the horizontal span of the new connection.
+/// * `compact` - A boolean flag; if true, enables tighter graph spacing rule exceptions.
+/// * `info_is_merge` - True if the current commit being processed is a merge.
+/// * `idx` - The index of the current commit in the track list.
+/// * `p` - The parent index currently being evaluated
+///   (e.g., `0` for first parent, `1` for second, etc).
+/// * `par_idx` - The index of the parent commit in the track list.
+///
+/// # Returns
+///
+/// Returns `true` if there is an unallowable visual collision in this row,
+/// and `false` if the connection can safely occupy this row.
+fn has_overlap(
+    sub_entry: &[Occ],
+    column_range: (usize, usize),
+    compact: bool,
+    info_is_merge: bool,
+    idx: usize,
+    p: usize,
+    par_idx: &usize,
+) -> bool {
+    // Check for overlaps with existing `Occ` in the current row.
+    for other_range in sub_entry {
+        // Check if the current column range overlaps with the other range.
+        if other_range.overlaps(&column_range) {
+            match other_range {
+                // If the other occupation is a commit.
+                Occ::Commit(target_index, _) => {
+                    // In compact mode, we might allow overlap with the commit itself
+                    // for merge commits (specifically the second parent) to keep the
+                    // graph tighter.
+                    if !compact || !info_is_merge || idx != *target_index || p == 0 {
+                        return true;
+                    }
+                }
+                // If the other occupation is a range (another connection).
+                Occ::Range(o_idx, o_par_idx, _, _) => {
+                    // Avoid overlap with connections between the same commits.
+                    if idx != *o_idx && par_idx != o_par_idx {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Find the index at which a between-branch connection
