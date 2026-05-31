@@ -827,6 +827,12 @@ fn get_deviate_index(
     }
 }
 
+/** Print a graph as lines for a terminal
+*/
+pub fn print_graph_terminal() {
+    todo!();
+}
+
 /// Creates the complete graph visualization, incl. formatter commits.
 fn print_graph(
     characters: &Characters,
