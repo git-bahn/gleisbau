@@ -13,6 +13,7 @@ use crate::settings::Settings;
 use crate::track::parse_merge_summary;
 use crate::track::Binx;
 use crate::track::BranchInfo as AbstractBranchInfo;
+use crate::track::BranchInfoType;
 use crate::track::CommitInfo as AbstractCommitInfo;
 use crate::track::TrackMap as AbstractTrackMap;
 use crate::track::FORK;
@@ -377,9 +378,7 @@ fn extract_merge_branches(
                 Some(child_oid), // The merge commit itself.
                 par_branch_name,
                 persistence,
-                false,         // Not a remote branch.
-                true,          // This is a derived merge branch.
-                false,         // Not a tag.
+                BranchInfoType::Derived, // This is a derived merge branch.
                 Some(idx + 1), // End index typically points to the commit after the merge.
             );
             merge_branches.push(branch_info);
@@ -438,9 +437,7 @@ fn extract_tags_as_branches(
                     None, // No merge OID for tags.
                     name.to_string(),
                     settings.branches.persistence.len() as u8 + 1, // Tags usually have highest persistence.
-                    false,                                         // Not a remote branch.
-                    false,                                         // Not a derived merge branch.
-                    true,                                          // This is a tag.
+                    BranchInfoType::Tag,
                     Some(*target_index),
                 );
                 tags_info.push(tag_info);

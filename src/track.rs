@@ -41,6 +41,19 @@ where
     pub all_branches: Vec<BranchInfo<Oid>>,
 }
 
+/// Gleisbau branch come in several variants, that indicate their origin
+#[derive(PartialEq)]
+pub enum BranchInfoType {
+    // Reference to remote branch
+    Remote,
+    // Local branch
+    Local,
+    // Auto-branch derived from a merge commit, without a git branch label
+    Derived,
+    // Not a git-branch but a git-tag
+    Tag,
+}
+
 /// Represents a branch (real or derived from merge summary).
 pub struct BranchInfo<Oid> {
     /// The Object ID that the branch/tag points at. Used as the grand-child to start tracing the branch towards grand-parent.
@@ -61,17 +74,17 @@ pub struct BranchInfo<Oid> {
     pub range: (Option<usize>, Option<usize>),
 }
 impl<Oid> BranchInfo<Oid> {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         target: Oid,
         merge_target: Option<Oid>,
         name: String,
         persistence: u8,
-        is_remote: bool,
-        is_merged: bool,
-        is_tag: bool,
+        branch_type: BranchInfoType,
         end_index: Option<usize>,
     ) -> Self {
+        let is_remote = branch_type == BranchInfoType::Remote;
+        let is_merged = branch_type == BranchInfoType::Derived;
+        let is_tag = branch_type == BranchInfoType::Tag;
         BranchInfo {
             target,
             merge_target,
