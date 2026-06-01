@@ -79,11 +79,12 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
         return Ok((vec![], vec![], vec![]));
     }
 
-    // 1. Calculate dimensions and inserts
+    // Calculate graph width and vertical inserts
     let num_cols = calculate_graph_dimensions(&graph.layout);
     let inserts = get_inserts(tracks, layout, settings.compact);
 
-    // 3. Compute commit text and index map
+    // Use graph with to format commit text, taking inserts into account
+    // index_map lists the start row of each commit in layout range
     let (mut text_lines, index_map) = build_commit_lines_and_map(
         settings,
         repo,
@@ -94,20 +95,19 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
         &inserts,
     )?;
 
-    // 4. Calculate total rows and initialize/draw the grid
+    // Draw the graph on a grid
     let total_rows = text_lines.len();
-
     let mut grid = draw_graph_lines(
         settings, tracks, layout, num_cols, &inserts, &index_map, total_rows,
     );
 
-    // 5. Handle reverse order
+    // Handle reverse order
     if settings.reverse_commit_order {
         text_lines.reverse();
         grid.reverse();
     }
 
-    // 6. Final printing and result
+    // Print graph and text as two equal length lists of ansi coloured text rows
     let lines = print_graph_and_text(&settings.characters, &grid, text_lines, settings.colored);
 
     Ok((lines.0, lines.1, index_map))
@@ -218,6 +218,9 @@ fn build_commit_lines_and_map(
 }
 
 /// Initializes the grid and draws all commit/branch connections.
+///
+/// # Arguments
+/// * index_map  map commit relative to layout start, to a row in the grid
 fn draw_graph_lines(
     settings: &Settings,
     tracks: &TrackMap,
