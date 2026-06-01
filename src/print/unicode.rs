@@ -168,7 +168,8 @@ fn build_commit_lines_and_map<'a>(
     let mut text_lines = vec![];
     let mut offset = 0;
 
-    for (idx, info) in tracks.commits.iter().enumerate() {
+    for idx in layout.iter_commit_index() {
+        let info = &tracks.commits[idx];
         index_map.push(idx + offset);
 
         // Calculate needed graph inserts (for ranges only)
@@ -242,7 +243,8 @@ fn draw_graph_lines(
         },
     );
 
-    for (idx, info) in tracks.commits.iter().enumerate() {
+    for idx in layout.iter_commit_index() {
+        let info = &tracks.commits[idx];
         let Some(trace) = info.branch_trace else {
             continue;
         };
@@ -640,7 +642,8 @@ fn get_inserts(
     // First, for each commit, we initialize an entry in the `inserts`
     // map with a single row containing the commit itself. This ensures
     // that every commit has a position in the grid.
-    for (idx, info) in tracks.commits.iter().enumerate() {
+    for idx in layout.iter_commit_index() {
+        let info = &tracks.commits[idx];
         // Get the visual column assigned to the branch of this commit. Unwrap is safe here
         // because `branch_trace` should always point to a valid branch with an assigned column
         // for commits that are included in the filtered graph.
@@ -657,7 +660,8 @@ fn get_inserts(
     // Now, iterate through the commits again to identify connections
     // needed between parents that are not directly adjacent in the
     // `tracks.commits` list.
-    for (idx, info) in tracks.commits.iter().enumerate() {
+    for idx in layout.iter_commit_index() {
+        let info = &tracks.commits[idx];
         // If the commit has a branch trace (meaning it belongs to a visualized branch).
         if let Some(trace) = info.branch_trace {
             // Get the `BranchInfo` for the current commit's branch.

@@ -24,6 +24,8 @@ const ORIGIN: &str = "origin/";
     which will assign columns and colours to the tracks.
 */
 pub struct TrackLayout {
+    // Specifies which commits are rendered
+    source: Range<usize>,
     // Map a TrackMap.branch index to a TrackLayout.branch_visual index
     track_visual: HashMap<usize, usize>,
     // Visuals for all tracks in the rendered range
@@ -31,6 +33,10 @@ pub struct TrackLayout {
 }
 
 impl TrackLayout {
+    /// Iterate all index into TrackMap.commits used for this layout
+    pub fn iter_commit_index(&self) -> impl Iterator<Item = usize> {
+        self.source.clone()
+    }
     pub fn track_visual(&self, track_inx: usize) -> Option<&BranchVis> {
         self.track_visual
             .get(&track_inx)
@@ -137,6 +143,7 @@ pub fn layout_track_range(
 
     // Pass 3: The Packing Algorithm
     let mut layout = TrackLayout {
+        source: range,
         track_visual: track_visual_map,
         branch_visual: branch_visuals,
     };
