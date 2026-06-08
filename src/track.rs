@@ -414,37 +414,44 @@ fn extract_merge_branches(
 
     for (idx, info) in commits.iter().enumerate() {
         // Only process if the commit is a merge.
-        if info.is_merge {
-            let commit = repository
-                .find_commit(info.oid)
-                .map_err(|err| err.message().to_string())?;
+        if info.parents.len() < 2 {
+            continue;
+        }
+        let child_oid = info.oid;
+        let commit = repository
+            .find_commit(child_oid)
+            .map_err(|err| err.message().to_string())?;
 
-            // Attempt to get the commit summary.
-            if let Some(summary) = commit.summary() {
-                let parent_oid = commit
-                    .parent_id(1)
-                    .map_err(|err| err.message().to_string())?;
+        // Parse the branch names from the merge summary using configured patterns.
+        // use get(parent_index - 1) because the primary parent is NOT in this list
+        let par_branch_names = commit
+            .summary()
+            .map(|summary| parse_merge_summary(summary, &settings.merge_patterns))
+            .unwrap_or(vec![]);
 
-                // Parse the branch name from the merge summary using configured patterns.
-                let branch_name = parse_merge_summary(summary, &settings.merge_patterns)
-                    .unwrap_or_else(|| "unknown".to_string());
+        // Iterate over branches merged into this branch (Skip primary parent)
+        for parent_index in 1..info.parents.len() {
+            let parent_oid = info.parents[parent_index];
+            let par_branch_name = par_branch_names
+                .get(parent_index - 1)
+                .unwrap_or(&"unknown".to_string())
+                .clone();
 
-                // Determine persistence and order for the derived branch.
-                let persistence = branch_order(&branch_name, &settings.branches.persistence) as u8;
+            // Determine persistence and order for the derived branch.
+            let persistence = branch_order(&par_branch_name, &settings.branches.persistence) as u8;
 
-                // Create and add the BranchInfo for the derived merge branch.
-                let branch_info = BranchInfo::new(
-                    parent_oid,     // Target is the parent of the merge.
-                    Some(info.oid), // The merge commit itself.
-                    branch_name,
-                    persistence,
-                    false,         // Not a remote branch.
-                    true,          // This is a derived merge branch.
-                    false,         // Not a tag.
-                    Some(idx + 1), // End index typically points to the commit after the merge.
-                );
-                merge_branches.push(branch_info);
-            }
+            // Create and add the BranchInfo for the derived merge branch.
+            let branch_info = BranchInfo::new(
+                parent_oid,      // Target is the parent of the merge.
+                Some(child_oid), // The merge commit itself.
+                par_branch_name,
+                persistence,
+                false,         // Not a remote branch.
+                true,          // This is a derived merge branch.
+                false,         // Not a tag.
+                Some(idx + 1), // End index typically points to the commit after the merge.
+            );
+            merge_branches.push(branch_info);
         }
     }
     Ok(merge_branches)
@@ -681,15 +688,38 @@ fn branch_order(name: &str, order: &[Regex]) -> usize {
 }
 
 /// Tries to extract the name of a merged-in branch from the merge commit summary.
-pub fn parse_merge_summary(summary: &str, patterns: &MergePatterns) -> Option<String> {
+/// The number of names returned corresponds to the number of merged-in
+/// parents. If no match was found, the empty list is returned.
+/// Normal merge return a single item,
+/// octo-merges may have several.
+///
+/// *Note*: git gives full flexibility to use your own messages, so there is
+/// no guarantee that all merged-in parents are named.
+pub fn parse_merge_summary(summary: &str, patterns: &MergePatterns) -> Vec<String> {
+    // Try all merge patterns
     for regex in &patterns.patterns {
-        if let Some(captures) = regex.captures(summary) {
-            if captures.len() == 2 && captures.get(1).is_some() {
-                return captures.get(1).map(|m| m.as_str().to_string());
-            }
+        let Some(captures) = regex.captures(summary) else {
+            continue;
+        };
+        if captures.len() != 2 {
+            continue;
         }
+        let Some(match1) = captures.get(1) else {
+            continue;
+        };
+
+        // For octo-merge patterns, captured_str holds a comma separated
+        // list. For normal merge only a single name will be returned.
+        return match1
+            .as_str()
+            .replace(" and ", ", ") // Standardize separators
+            .split(',')
+            .map(|s| s.trim().trim_matches('\'').to_string()) // Clean up spacing and quotes
+            .filter(|s| !s.is_empty())
+            .collect();
     }
-    None
+    // No pattern match, return an empty list
+    vec![]
 }
 
 #[cfg(test)]
@@ -709,27 +739,62 @@ mod tests {
 
         assert_eq!(
             super::parse_merge_summary(gitlab_pull, &patterns),
-            Some("feature/my-feature".to_string()),
+            vec!["feature/my-feature".to_string()],
         );
         assert_eq!(
             super::parse_merge_summary(git_default, &patterns),
-            Some("feature/my-feature".to_string()),
+            vec!["feature/my-feature".to_string()],
         );
         assert_eq!(
             super::parse_merge_summary(git_master, &patterns),
-            Some("feature/my-feature".to_string()),
+            vec!["feature/my-feature".to_string()],
         );
         assert_eq!(
             super::parse_merge_summary(github_pull, &patterns),
-            Some("feature/my-feature".to_string()),
+            vec!["feature/my-feature".to_string()],
         );
         assert_eq!(
             super::parse_merge_summary(github_pull_2, &patterns),
-            Some("feature/my-feature".to_string()),
+            vec!["feature/my-feature".to_string()],
         );
         assert_eq!(
             super::parse_merge_summary(bitbucket_pull, &patterns),
-            Some("feature/my-feature".to_string()),
+            vec!["feature/my-feature".to_string()],
+        );
+
+        //
+        //  Octo merge
+        //
+
+        let octo_git = "Merge branches 'feature/foo', 'feature/bar' and 'bugfix/baz'";
+        let octo_git_into =
+            "Merge branches 'feature/foo', 'feature/bar' and 'bugfix/baz' into target_branch";
+        let octo_bitbucet =
+            "Merged in feature/foo, feature/bar, bugfix/baz (pull requests #10, #11, #12)";
+
+        assert_eq!(
+            super::parse_merge_summary(octo_git, &patterns),
+            vec![
+                "feature/foo".to_string(),
+                "feature/bar".to_string(),
+                "bugfix/baz".to_string(),
+            ],
+        );
+        assert_eq!(
+            super::parse_merge_summary(octo_git_into, &patterns),
+            vec![
+                "feature/foo".to_string(),
+                "feature/bar".to_string(),
+                "bugfix/baz".to_string(),
+            ],
+        );
+        assert_eq!(
+            super::parse_merge_summary(octo_bitbucet, &patterns),
+            vec![
+                "feature/foo".to_string(),
+                "feature/bar".to_string(),
+                "bugfix/baz".to_string(),
+            ],
         );
     }
 }

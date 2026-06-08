@@ -291,6 +291,8 @@ impl Default for MergePatterns {
     fn default() -> Self {
         MergePatterns {
             patterns: vec![
+                //---- 2 parent merge ----
+
                 // GitLab pull request
                 Regex::new(r"^Merge branch '(.+)' into '.+'$").unwrap(),
                 // Git default
@@ -303,6 +305,15 @@ impl Default for MergePatterns {
                 Regex::new(r"^Merge branch '(.+)' of .+$").unwrap(),
                 // BitBucket pull request
                 Regex::new(r"^Merged in (.+) \(pull request #[0-9]+\)$").unwrap(),
+                //---- 3+ parent merge (octo-merge) ----
+
+                // Git default octopus merge into a specific branch
+                Regex::new(r"^Merge branches (.+) into .+$").unwrap(),
+                // Git default octopus merge into current branch
+                Regex::new(r"^Merge branches (.+)$").unwrap(),
+                // Bitbucket potential multi-branch / batch merge
+                // e.g., "Merged in branch-a, branch-b (pull requests #1, #2)"
+                Regex::new(r"^Merged in (.+) \(pull requests? .+\)$").unwrap(),
             ],
         }
     }
