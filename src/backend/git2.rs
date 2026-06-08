@@ -10,7 +10,7 @@ use git2::Oid;
 use git2::Repository;
 
 use crate::settings::Settings;
-use crate::track::parse_merge_summary;
+use crate::track::create_merge_branches;
 use crate::track::Binx;
 use crate::track::BranchInfo as AbstractBranchInfo;
 use crate::track::BranchInfoType;
@@ -351,40 +351,19 @@ fn extract_merge_branches(
         if info.parents.len() < 2 {
             continue;
         }
-        let child_oid = info.oid;
+        let child_oid = &info.oid;
         let commit = repository
-            .find_commit(child_oid)
+            .find_commit(*child_oid)
             .map_err(|err| err.message().to_string())?;
 
-        // Parse the branch names from the merge summary using configured patterns.
-        // use get(parent_index - 1) because the primary parent is NOT in this list
-        let par_branch_names = commit
-            .summary()
-            .map(|summary| parse_merge_summary(summary, &settings.merge_patterns))
-            .unwrap_or(vec![]);
-
-        // Iterate over branches merged into this branch (Skip primary parent)
-        for parent_index in 1..info.parents.len() {
-            let parent_oid = info.parents[parent_index];
-            let par_branch_name = par_branch_names
-                .get(parent_index - 1)
-                .unwrap_or(&"unknown".to_string())
-                .clone();
-
-            // Determine persistence and order for the derived branch.
-            let persistence = branch_order(&par_branch_name, &settings.branches.persistence) as u8;
-
-            // Create and add the BranchInfo for the derived merge branch.
-            let branch_info = BranchInfo::new(
-                parent_oid,      // Target is the parent of the merge.
-                Some(child_oid), // The merge commit itself.
-                par_branch_name,
-                persistence,
-                BranchInfoType::Derived, // This is a derived merge branch.
-                Some(idx + 1), // End index typically points to the commit after the merge.
-            );
-            merge_branches.push(branch_info);
-        }
+        merge_branches.extend(create_merge_branches(
+            &settings.merge_patterns,
+            &settings.branches.persistence,
+            child_oid,
+            commit.summary().unwrap_or(""),
+            &info.parents,
+            idx + 1, // End index typically points to the commit
+        ));
     }
     Ok(merge_branches)
 }

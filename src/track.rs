@@ -195,6 +195,47 @@ impl<Oid> Builder<Oid>
 //  Generic functions not tied to a particular struct
 //
 
+pub fn create_merge_branches<Oid: Clone>(
+    merge_patterns: &MergePatterns,
+    persistence_patterns: &[Regex],
+    child_oid: &Oid,
+    message: &str,
+    parents: &[Oid],
+    end_index: usize,
+) -> Vec<BranchInfo<Oid>> {
+    let mut merge_branches = vec![];
+
+    // Parse the branch names from the merge summary using configured patterns.
+    // use get(parent_index - 1) because the primary parent is NOT in this list
+    let par_branch_names = parse_merge_summary(message, merge_patterns);
+
+    // Iterate over branches merged into this branch (Skip primary parent)
+    #[allow(clippy::needless_range_loop)]
+    for parent_index in 1..parents.len() {
+        let parent_oid = parents[parent_index].clone();
+        let par_branch_name = par_branch_names
+            .get(parent_index - 1)
+            .unwrap_or(&"unknown".to_string())
+            .clone();
+
+        // Determine persistence and order for the derived branch.
+        let persistence = branch_order(&par_branch_name, persistence_patterns) as u8;
+
+        // Create and add the BranchInfo for the derived merge branch.
+        let branch_info = BranchInfo::new(
+            parent_oid,              // Branch target is the parent of the merge.
+            Some(child_oid.clone()), // The merge commit is the merge_target
+            par_branch_name,
+            persistence,
+            BranchInfoType::Derived,
+            Some(end_index),
+        );
+        merge_branches.push(branch_info);
+    }
+
+    merge_branches
+}
+
 /// Finds the index for a branch name from a slice of prefixes
 pub fn branch_order(name: &str, order: &[Regex]) -> usize {
     order
