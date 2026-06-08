@@ -32,20 +32,26 @@ define_u32_index!(
     Use [layout_track_range] to construct a [TrackLayout]
 */
 pub struct TrackLayout {
-    // Specifies which commits are rendered
+    /// Specifies which commits are rendered.
+    ///
+    /// *Note*: The range may be larger than what is valid in [TrackMap]
     source: Range<usize>,
-    // Map a TrackMap.branch index to a TrackLayout.branch_visual index
+    /// Map a TrackMap.branch index to a TrackLayout.branch_visual index
     track_visual: HashMap<Binx, Vinx>,
-    // Visuals for all tracks in the rendered range
+    /// Visuals for all tracks in the rendered range
     branch_visual: Vec<BranchVis>,
 }
 
 impl TrackLayout {
-    /// Iterate all index into TrackMap.commits used for this layout
+    /// Iterate all index into TrackMap.commits specified for this layout.
+    ///
+    /// *Note*: This include out-of-range index, so use TrackMap.commits.get()
     pub fn iter_commit_index(&self) -> impl Iterator<Item = usize> {
         self.source.clone()
     }
-    /// First index into TrackMap in this layout
+    /// First index into TrackMap in this layout.
+    ///
+    /// *Note*: Not checked for out-of-range, so use TrackMap.commits.get()
     pub fn commit_index_start(&self) -> usize {
         self.source.start
     }
@@ -57,6 +63,9 @@ impl TrackLayout {
     pub fn track_visual_vec(&self) -> &Vec<BranchVis> {
         &self.branch_visual
     }
+    /// Number of commits specified for this layout.
+    ///
+    /// *Note*: The specification may include invalid index.
     pub fn commit_count(&self) -> usize {
         self.source.len()
     }
@@ -110,14 +119,13 @@ pub fn layout_track_range(
     // --- Pass 1: Create initial BranchVis (Colors and Order Groups) ---
     for i in range.clone() {
         // Find track assigned to commit
-        let commit = &track_map.commits[i];
+        let Some(commit) = &track_map.commits.get(i) else {
+            // Ignore requests for commits outside the valid range
+            continue;
+        };
         let Some(b_idx) = commit.branch_trace else {
-            todo!("Decide how to handle commit without track");
-            /*
-                Do I want to show it?
-                Perhaps to panic?
-                Do I want to autogenerate a branch named "anonymous"?
-            */
+            log::error!("Commit #{} does not have a branch_trace", i);
+            return Err("All commits in track map must have a track".into());
         };
 
         // If the track does not yet have a visualization, create it
