@@ -14,11 +14,13 @@ use crate::track::parse_merge_summary;
 use crate::track::Binx;
 use crate::track::BranchInfo as AbstractBranchInfo;
 use crate::track::BranchInfoType;
+use crate::track::Builder as AbstractBuilder;
 use crate::track::CommitInfo as AbstractCommitInfo;
 use crate::track::TrackMap as AbstractTrackMap;
 use crate::track::FORK;
 
 pub type BranchInfo = AbstractBranchInfo<Oid>;
+pub type Builder = AbstractBuilder<Oid>;
 pub type CommitInfo = AbstractCommitInfo<Oid>;
 pub type TrackMap = AbstractTrackMap<Oid>;
 
