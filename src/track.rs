@@ -71,6 +71,18 @@ impl<Oid: Clone + Eq + Hash> TrackMap<Oid> {
         // Make sure every child has a branch
         commit_index
     }
+    /// Get at reference to the commit with this Oid
+    pub fn commit_at(&self, commit_id: &Oid) -> Option<&CommitInfo<Oid>> {
+        self.indices
+            .get(commit_id)
+            .map(|&commit_index| &self.commits[commit_index])
+    }
+    /// Get a reference to the branch associated with the commit
+    pub fn branch_at(&self, commit_id: &Oid) -> Option<&BranchInfo<Oid>> {
+        self.commit_at(commit_id)
+            .and_then(|commit_info| commit_info.branch_trace)
+            .map(|branch_index| &self.all_branches[branch_index])
+    }
     /// Push a branch onto tracks.all_branches and return its index.
     ///
     /// *Note*: You must update the target commit to point
@@ -145,7 +157,9 @@ impl<Oid> BranchInfo<Oid> {
 pub struct CommitInfo<Oid> {
     /// Commit object identifier from git2
     pub oid: Oid,
-    /// Parents of commit. Filled in first pass
+    /// Parents of commit. Filled in first pass.
+    ///
+    /// *Note*: May point to commits not yet in TrackMap
     pub parents: Vec<Oid>,
     /// Children of commit. Filled in second pass
     pub children: Vec<Oid>,
@@ -306,34 +320,35 @@ pub type PersistencePatterns = Vec<Regex>;
     This means that children are always added before their parents.
     This assumption reduces the amount of memory needed for building.
 */
-pub struct Builder<Oid>
-    where Oid: Clone + Eq + Hash
-{
+pub struct Builder<Oid: Clone + Eq + Hash> {
     /// Track structure to update
     tracks: Rc<RefCell<TrackMap<Oid>>>,
 
     /// Merge patterns to use when deriving a branch name from a merge
-    merge_patterns: MergePatterns,
+    merge_patterns: Rc<MergePatterns>,
 
     /// Branch persistence from branch name pattern
     persistence: PersistencePatterns,
+
+    /// For each missing parent, store information
+    /// that should be added when it is found.
+    missing_parents: HashMap<Oid, MissingParent<Oid>>,
 }
-impl<Oid> Builder<Oid> 
-    where Oid: Clone + Eq + Hash 
-{
+impl<Oid: Clone + Eq + Hash> Builder<Oid> {
     /// Create a builder for the specified TrackMap
     pub fn new(target: Rc<RefCell<TrackMap<Oid>>>) -> Self {
         Self {
             tracks: target.clone(),
-            merge_patterns: MergePatterns::default(),
+            merge_patterns: MergePatterns::default().into(),
             persistence: vec![],
+            missing_parents: HashMap::new(),
         }
     }
 
     /// Set the regex patterns that are used to derive
     /// branch names from merge commit message.
     pub fn with_merge_patterns(mut self, merge_patterns: MergePatterns) -> Self {
-        self.merge_patterns = merge_patterns;
+        self.merge_patterns = merge_patterns.into();
         self
     }
     /// Set a sequence of branch name regex that determine the
@@ -342,22 +357,142 @@ impl<Oid> Builder<Oid>
         self.persistence = persistence;
         self
     }
-    
+
+    #[allow(clippy::doc_overindented_list_items)]
     /// Add a commit to the TrackMap.
     /// When a missing parent is added, create the missing relations.
-    pub fn add_commit(&mut self, id: Oid, parents: Vec<Oid>) {
+    ///
+    /// # Arguments
+    /// - id : Child Oid
+    /// - message: Child commit message. If child is a merge this may give
+    ///            a name to a merged branch.
+    /// - parents: List of parent Oid.
+    pub fn add_commit(&mut self, id: Oid, message: String, parents: Vec<Oid>) {
+        let merge_patterns = self.merge_patterns.clone();
 
-        // TODO Expand existing track to this commit or create a new track
-        let track = Binx(0); // BUG - should be computed properly. This is only to make it compile
+        // The add_commit function has the following steps:
+        //
+        // 1. Compute and register commit
+        // 1.1. Add CommitInfo to tracks
+        // 1.2. Compute branch for commit
+        //
+        // 2. Record parents of commit
+        //  for each unknown parent,
+        // 2.1. if first parent - store as continuation
+        // 2.2. if merge-parent - store as derived branch
 
-        // Find parents
+        //
+        //   1. The commit
+        //
+
+        // 1.1. Add CommitInfo to tracks
+
         let ci = CommitInfo {
-            oid: id,
-            parents,
+            oid: id.clone(),
+            parents: parents.clone(),
+            // TODO why the child pointer?? Can it be completely removed?
             children: vec![],
-            branch_trace: Some(track),
+            branch_trace: None, // We will set this in a moment
         };
         self.tracks.borrow_mut().add_commit(ci);
+
+        // 1.2. Compute branch_trace for commit
+
+        let commit_index = *self
+            .tracks
+            .borrow()
+            .indices
+            .get(&id)
+            .expect("Commit must be known in TrackMap");
+        self.missing_parents
+            .remove(&id)
+            .unwrap_or_default()
+            .set_commit_branch(&mut *self.tracks.borrow_mut(), commit_index);
+
+        //
+        //   2. Parents
+        //
+
+        // 2.1 Primary parent
+
+        if !parents.is_empty() {
+            // Primary parent continues the commit at this commit
+            // Store that information in MissingParent so it can be
+            // used when the parent commit is processed.
+            let child_inx = *self
+                .tracks
+                .borrow()
+                .indices
+                .get(&id)
+                .expect("Commit must be known in TrackMap");
+            let parent_oid = parents[0].clone();
+            self.missing_parents
+                .entry(parent_oid)
+                .or_default()
+                .add_child(child_inx);
+        }
+
+        // 2.2. Non-Primary parents
+
+        // Run through all merged parents and add a derived branch
+        // if it is not already part of a branch.
+        // Normally every merged parent would start a branch.
+        // This does not happen if the merged parent has already
+        // been claimed by another branch.
+        let add_branch_if_missing = |child_oid: Oid, parent_oid: Oid, par_branch_name: String| {
+            // Determine persistence and order for the derived branch.
+            let par_persistence = branch_order(&par_branch_name, &self.persistence) as u8;
+
+            // Abort if a branch is already here, with at least same persistence.
+            // Note: This never happens on first walk of TrackMap
+            if let Some(existing_branch) = self.tracks.borrow().branch_at(&parent_oid) {
+                if existing_branch.persistence <= par_persistence {
+                    return;
+                }
+            }
+
+            let Some(&end_index) = self.tracks.borrow().indices.get(&parent_oid) else {
+                // Parent is outside self.tracks,
+                // and we build TrackMap in one batch
+                // so it is safe to ignore.
+                // BUG Incrementally building TrackMap will
+                // fail if this is ignored.
+                // TODO Add to known child unknown parent
+                // and store  branch info there as well
+                return;
+            };
+
+            // Create and remember the BranchInfo for the derived merge branch.
+            let new_branch = BranchInfo::new(
+                parent_oid.clone(),      // Target is the parent of the merge.
+                Some(child_oid.clone()), // The merge commit itself.
+                par_branch_name,
+                par_persistence,
+                BranchInfoType::Derived,
+                Some(end_index),
+            );
+
+            // TODO This code assumes that we only do one walk to fill
+            // TrackMap. If run a second time, the commit is already there
+            // and MissingParent is probably not the right way to do things.
+            self.missing_parents
+                .entry(parent_oid)
+                .or_default()
+                .set_branch(new_branch);
+        };
+
+        // Derive merge branches from merged-in parents
+        // and store them for later usage.
+        // TODO find a better name for this function.
+        // Perhaps derive_merge_branches
+        // or process_merged_parents
+        handle_merge_branches(
+            &merge_patterns,
+            &id, // Child Oid
+            &message,
+            &parents,
+            add_branch_if_missing,
+        );
     }
 }
 
