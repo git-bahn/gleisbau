@@ -236,6 +236,36 @@ pub fn create_merge_branches<Oid: Clone>(
     merge_branches
 }
 
+/// Visit all merged parents of a commit.
+/// The visitor is provided the assumed branch name
+/// derived from the merge message.
+///
+/// [TrackMap] uses this to derive new branches that targets the merged commit.
+pub fn handle_merge_branches<Oid: Clone>(
+    merge_patterns: &MergePatterns,
+    child_oid: &Oid,
+    message: &str,
+    parents: &[Oid],
+    mut branch_visitor: impl FnMut(Oid, Oid, String),
+) {
+    // Extract the branch names from the merge summary using configured patterns.
+    let par_branch_names = parse_merge_summary(message, merge_patterns);
+
+    // Visit all branches merged into this branch.
+    // parent 0 is not visited because it is the target branch.
+    #[allow(clippy::needless_range_loop)]
+    for parent_index in 1..parents.len() {
+        let child_oid = child_oid.clone();
+        let parent_oid = parents[parent_index].clone();
+        let par_branch_name = par_branch_names
+            .get(parent_index - 1)
+            .unwrap_or(&"unknown".to_string())
+            .clone();
+
+        branch_visitor(child_oid, parent_oid, par_branch_name);
+    }
+}
+
 /// Finds the index for a branch name from a slice of prefixes
 pub fn branch_order(name: &str, order: &[Regex]) -> usize {
     order
