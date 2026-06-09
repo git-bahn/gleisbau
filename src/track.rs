@@ -12,7 +12,7 @@ use std::rc::Rc;
 use regex::Regex;
 
 use crate::define_u32_index;
-use crate::settings::MergePatterns;
+pub use crate::settings::MergePatterns;
 
 const ORIGIN: &str = "origin/";
 pub const FORK: &str = "fork/";
@@ -145,6 +145,8 @@ impl<Oid> CommitInfo<Oid> {
     }
 }
 
+pub type PersistencePatterns = Vec<Regex>;
+
 /**
     Add repository commit information to a [TrackMap].
 
@@ -163,6 +165,12 @@ pub struct Builder<Oid>
 {
     /// Track structure to update
     tracks: Rc<RefCell<TrackMap<Oid>>>,
+
+    /// Merge patterns to use when deriving a branch name from a merge
+    merge_patterns: MergePatterns,
+
+    /// Branch persistence from branch name pattern
+    persistence: PersistencePatterns,
 }
 impl<Oid> Builder<Oid> 
     where Oid: Clone + Eq + Hash 
@@ -171,8 +179,24 @@ impl<Oid> Builder<Oid>
     pub fn new(target: Rc<RefCell<TrackMap<Oid>>>) -> Self {
         Self {
             tracks: target.clone(),
+            merge_patterns: MergePatterns::default(),
+            persistence: vec![],
         }
     }
+
+    /// Set the regex patterns that are used to derive
+    /// branch names from merge commit message.
+    pub fn with_merge_patterns(mut self, merge_patterns: MergePatterns) -> Self {
+        self.merge_patterns = merge_patterns;
+        self
+    }
+    /// Set a sequence of branch name regex that determine the
+    /// persistence order of branches.
+    pub fn with_persistence_patterns(mut self, persistence: PersistencePatterns) -> Self {
+        self.persistence = persistence;
+        self
+    }
+    
     /// Add a commit to the TrackMap.
     /// When a missing parent is added, create the missing relations.
     pub fn add_commit(&mut self, id: Oid, parents: Vec<Oid>) {
