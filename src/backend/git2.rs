@@ -168,6 +168,8 @@ pub fn assign_branches(
                 // New policy: Do not keep any branch that has no commits assigned.
                 // When a commit has multiple labels (branches and/or tags)
                 // you must use module label.rs instead.
+                // TODO Keep at most one branch per commit, now that labels can
+                // deal with multi-branch per commit.
                 if any_assigned {
                     branch_idx += 1;
                     Some(Binx::new(branch_idx - 1))
