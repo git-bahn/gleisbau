@@ -111,8 +111,11 @@ pub enum BranchInfoType {
 pub struct BranchInfo<Oid> {
     /// The Object ID that the branch/tag points at. Used as the grand-child to start tracing the branch towards grand-parent.
     pub target: Oid,
+    /// The merge commit that defined this branch. It has target as a parent.
     pub merge_target: Option<Oid>,
+    /// Layout: A branch that this branch was forked from
     pub source_branch: Option<Binx>,
+    /// Layout: A branch that merged/continues this branch
     pub target_branch: Option<Binx>,
     /// Name of branch. Either the branch/tag name, or derived from a merge-commit message.
     pub name: String,
@@ -124,6 +127,9 @@ pub struct BranchInfo<Oid> {
     pub is_merged: bool,
     /// Is branch a tag reference
     pub is_tag: bool,
+    /** Layout: Row range occucpied by branch. It is defined as low and
+    high index into TrackMap.commits, but in Layout this is used as an
+    abstract grid. */
     pub range: (Option<usize>, Option<usize>),
 }
 impl<Oid> BranchInfo<Oid> {
