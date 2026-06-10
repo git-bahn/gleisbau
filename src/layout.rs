@@ -96,6 +96,31 @@ pub struct BranchVis {
     pub svg_color: String,
     /// The column the branch is located in
     pub column: Option<usize>,
+    /** Row range occupied by branch. It is defined as low and
+    high index into TrackMap.commits, but in Layout this index is used
+    as one of the axis.
+
+    - .0 is low value (youngest commit, near top)
+    - .1 is high value (oldest commit, near bottom)
+
+    This includes the row occupied by track fork (below oldest commit in track)
+    and the row occupied by track merge (above youngest commit).
+    The merge is done at the exact row of the merge target, but the fork
+    could be done at any row after fork commit as long as no child of the fork
+    has been passed yet.
+    Track end is a child of the fork commit, but there may be others as well.
+
+    This definition means two tracks can exist in the same column if they touch
+    at the ends, but not if they overlap.
+    */
+    pub row_range: (usize, usize),
+
+    /** Flag if branch continues outside visible range
+
+    - .0 is low end (youngest commit, near top)
+    - .1 is high end (oldest commit, near bottom)
+    */
+    pub open_end: (bool, bool),
 }
 
 impl BranchVis {
@@ -107,6 +132,8 @@ impl BranchVis {
             term_color,
             svg_color,
             column: None,
+            row_range: (0, 0),
+            open_end: (false, false),
         }
     }
 }
@@ -147,12 +174,18 @@ pub fn layout_track_range(
             color_counter += 1;
 
             let visual_data =
-                create_branch_visual(color_counter, branch_info, track_map, settings)?;
+                create_branch_visual(color_counter, branch_info, track_map, settings, i)?;
 
             let vis_idx = Vinx::new(branch_visuals.len());
             branch_visuals.push(visual_data);
             e.insert(vis_idx);
         }
+
+        // Update visualisation of track. This will continue a track in the layout
+        // so row_range.1 always points at the end row (highest index = oldest commit)
+        let vis_idx = track_visual_map[&b_idx];
+        let vis = &mut branch_visuals[vis_idx];
+        vis.row_range.1 = i;
     }
 
     // --- Pass 2: Connect Visual Groups (Target/Source Order Groups) ---
@@ -160,6 +193,14 @@ pub fn layout_track_range(
     for (b_idx, &vis_idx) in track_visual_map.iter() {
         let branch = &track_map.all_branches[*b_idx];
 
+        // Extend low end of row range to include the merge target
+        if let Some(&merge_target_index) = branch
+            .merge_target
+            .as_ref()
+            .and_then(|oid| track_map.indices.get(oid))
+        {
+            branch_visuals[vis_idx].row_range.0 = merge_target_index;
+        }
         // Resolve Target Order Group
         if let Some(target_idx) = branch.target_branch {
             // Check if the target branch has a visual in our current layout
@@ -169,6 +210,18 @@ pub fn layout_track_range(
             }
         }
 
+        // Extend high end of row range to include fork commit
+        if let Some(&fork_index) = Some(branch_visuals[vis_idx].row_range.1)
+            .map(|commit_inx| &track_map.commits[commit_inx])
+            .and_then(|commit| commit.parents.first())
+            .and_then(|oid| track_map.indices.get(oid))
+        {
+            // row_range.1 is inclusive, but we don't want to occupy a column
+            // used by a track that was merged here. By subtracting one, we move
+            // the fork point one commit up, which gives room to a merge, while
+            // preventing fork overlap.
+            branch_visuals[vis_idx].row_range.1 = fork_index - 1;
+        }
         // Resolve Source Order Group
         if let Some(source_idx) = branch.source_branch {
             // Check if the source branch has a visual in our current layout
@@ -236,11 +289,13 @@ pub fn get_deviate_index(
     }
 }
 
+/// Create a new [BranchVis] for a single commit
 fn create_branch_visual(
-    idx: usize,
-    branch: &BranchInfo,
+    idx: usize,           // Colour counter
+    branch: &BranchInfo,  // Branch to visualise
     track_map: &TrackMap, // Now we pass the map to look up other branches
     settings: &Settings,
+    row: usize, // Start visualisation as a dot on this row
 ) -> Result<BranchVis, String> {
     let mut name_to_color = &branch.name;
 
@@ -282,6 +337,8 @@ fn create_branch_visual(
         target_order_group: None,
         source_order_group: None,
         column: None,
+        row_range: (row, row),
+        open_end: (false, false),
     })
 }
 
@@ -306,13 +363,19 @@ pub fn assign_branch_columns(
         .track_visual
         .iter()
         .map(|(&branch_idx, &vis_idx)| {
-            let br = &track_map.all_branches[branch_idx];
             let vis = &layout.branch_visual[vis_idx];
+            // Open ends expand to capture all visible area.
+            let row_start = if vis.open_end.0 { 0 } else { vis.row_range.0 };
+            let row_end = if vis.open_end.1 {
+                layout.commit_count() - 1
+            } else {
+                vis.row_range.1
+            };
             (
                 branch_idx,
                 vis_idx,
-                br.range.0.unwrap_or(0),
-                br.range.1.unwrap_or(track_map.commits.len() - 1),
+                row_start,
+                row_end,
                 vis.source_order_group
                     .unwrap_or(settings.branches.order.len() + 1),
                 vis.target_order_group
