@@ -3,6 +3,17 @@ which order tracks should be placed.
 
 It is intended as last step before printing. Decoration of commits,
 e.g. with tags and branch labels, should be done during printing.
+
+# Coordinate system
+The layout is done in a 2D coordinate system:
+- row is defined as an index into TrackMap.commits
+- column is defined per branch track.
+
+Printing may also add extra rows or columns as the output format
+requires. For example, the unicode print will have twice the number
+of columns, and occasionally an extra row if lines cannot be drawn
+on a single line without colliding. For more information, see
+the [print](crate::print) module.
 */
 
 use std::cmp::max;
