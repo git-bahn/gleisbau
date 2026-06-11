@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Support for octo-merges (more than 2 parents)
+  Fix git relative worktrees extension, by updating dependencies
+  to include libgit2 v1.9.4
 
 
 ## [0.7.3] - 2026-05-01
