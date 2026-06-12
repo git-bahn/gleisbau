@@ -16,6 +16,8 @@ pub use crate::settings::MergePatterns;
 
 const ORIGIN: &str = "origin/";
 pub const FORK: &str = "fork/";
+const MAX_PERSISTENCE: u8 = 255;
+const AUTO_PERSISTENCE: u8 = 254;
 
 define_u32_index!(
     /** Index into [TrackMap].all_branches.
@@ -26,6 +28,9 @@ define_u32_index!(
     */
     pub struct Binx;
 );
+
+/// Index into [TrackMap].commits
+pub type Cinx = usize;
 
 /**
     Group commits into tracks. A track is a sequence of commits
@@ -65,6 +70,15 @@ impl<Oid: Clone + Eq + Hash> TrackMap<Oid> {
         self.commits.push(commit);
         // Make sure every child has a branch
         commit_index
+    }
+    /// Push a branch onto tracks.all_branches and return its index.
+    ///
+    /// *Note*: You must update the target commit to point
+    /// at this branch.
+    fn store_branch(&mut self, branch: BranchInfo<Oid>) -> Binx {
+        let branch_id = self.all_branches.len();
+        self.all_branches.push(branch);
+        Binx::new(branch_id)
     }
 }
 
@@ -142,6 +156,138 @@ impl<Oid> CommitInfo<Oid> {
     /// True if commit has multiple parents
     pub fn is_merge(&self) -> bool {
         self.parents.len() > 1
+    }
+}
+
+/** Data about a missing parent.
+
+    Mising parents occur when we walk towards the boundary of what is known.
+
+    - [add_child](MissingParent::add_child)
+      Store relations to parents not yet seen.
+    - [set_branch](MissingParent::set_branch)
+      Store candidate new branch for a not yet seen commit.
+
+*/
+struct MissingParent<Oid> {
+    known_children: Vec<Cinx>,
+    candidate_branch: Option<BranchInfo<Oid>>,
+}
+impl<Oid: Clone + Eq + Hash> Default for MissingParent<Oid> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl<Oid: Clone + Eq + Hash> MissingParent<Oid> {
+    pub fn new() -> Self {
+        Self {
+            known_children: vec![],
+            candidate_branch: None,
+        }
+    }
+    /// Store relation to missing parent from a known child. The child should
+    /// have the missing parent as primary parent.
+    ///
+    /// Later, when calling [Self::set_commit_branch], this child is one of the
+    /// candidates for extending its branch to include the parent.
+    pub fn add_child(&mut self, child_inx: Cinx) {
+        self.known_children.push(child_inx);
+    }
+    /// Set the candidate branch to create here. Does nothing if one already
+    /// is set and it has at least as good persistence as the new one.
+    ///
+    /// This should be called if a commit has merged the missing parent (the
+    /// parent is not the primary parent), or if the user has decided a branch
+    /// should start here. Remember to set the branch merge_target to indicate if
+    /// the child has merged the parent.
+    pub fn set_branch(&mut self, branch: BranchInfo<Oid>) {
+        let old_branch = &self
+            .candidate_branch
+            .as_ref()
+            // Keep old candidate if it has lower pers order = more persistene
+            .filter(|br| br.persistence <= branch.persistence);
+        if old_branch.is_none() {
+            self.candidate_branch = Some(branch);
+        }
+    }
+    /// Set branch on no-longer-missing parent commit.
+    /// It considers the current candidate branch and the branches of
+    /// all known children. If candidate branch is used, a new branch starts.
+    /// If a child branch is used, it is extended.
+    pub fn set_commit_branch(self, tracks: &mut TrackMap<Oid>, commit_inx: Cinx) {
+        //
+        // Find the most persistent branch that wants this commit
+        //
+
+        // Persistence of the best branch so far
+        let mut best_pers = self
+            .candidate_branch
+            .as_ref()
+            .map(|br| br.persistence)
+            .unwrap_or(MAX_PERSISTENCE); // the least possible persistent
+                                         // Child to extend, or None if the candidate is best
+        let mut best_extend = None;
+
+        // Check if any child branch is more persistent
+        for child_inx in self.known_children {
+            let child = &mut tracks.commits[child_inx];
+            if child.branch_trace.is_none() {
+                panic!("Known child does not yet have a branch");
+            }
+            let better_child_branch = child
+                .branch_trace
+                .map(|branch_index| &tracks.all_branches[branch_index])
+                .filter(|br| br.persistence < best_pers);
+            if let Some(br) = better_child_branch {
+                best_pers = br.persistence;
+                best_extend = Some(child_inx);
+            }
+        }
+
+        //
+        // Set commit branch
+        //
+
+        let branch_trace;
+        if let Some(best_child_inx) = best_extend {
+            // Extend the best child
+            let child = &mut tracks.commits[best_child_inx];
+            let branch_index = child
+                .branch_trace
+                .expect("All commits must have a branch - including child of unknown parent");
+            let child_branch = &mut tracks.all_branches[branch_index];
+            child_branch.range.1 = Some(commit_inx);
+            branch_trace = Some(branch_index)
+        } else if let Some(branch_info) = self.candidate_branch {
+            // Create candidate branch
+            let branch_index = tracks.store_branch(branch_info);
+            branch_trace = Some(branch_index);
+        } else {
+            // No candidates, so we must be at a head.
+            // Create a new track/branch starting at this commit
+
+            let target = tracks.commits[commit_inx].oid.clone();
+            let next_branch_index = tracks.all_branches.len();
+            let name = format!("anonhead-{}", next_branch_index);
+            let persistence = AUTO_PERSISTENCE;
+            let end_index = Some(commit_inx);
+
+            let new_branch = BranchInfo::new(
+                target, // Target is the commit to add.
+                None,   // no merge target
+                name,
+                persistence,
+                BranchInfoType::Local, // Default value
+                end_index,
+            );
+
+            // Add new branch and use it for the commit to add
+            let branch_index = tracks.store_branch(new_branch);
+            branch_trace = Some(branch_index);
+        }
+
+        // Update commit
+        tracks.commits[commit_inx].branch_trace = branch_trace;
     }
 }
 
