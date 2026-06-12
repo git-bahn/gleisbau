@@ -56,17 +56,24 @@ reverse the link between BranchInfo and BranchViz.
   anything about visualization.
 - BranchViz will be built repeatedly when rendering, from BranchInfo.
 
-## AS-IS
+AS-IS
 
-GitGraph --> BranchInfo --> BranchVis
+```mermaid
+classDiagram
+  GitGraph --> BranchInfo 
+  BranchInfo --> BranchVis
+```
 
-## TO-BE
+TO-BE
 
-
-TrackMap --> BranchInfo
-GitGraph --> TrackMap
-GitGraph --> BranchVis
-GitGraph --> LabelMap
+```mermaid
+classDiagram
+  TrackMap --> BranchInfo
+  TrackLayout --> BranchVis
+  GitGraph --> TrackMap
+  GitGraph --> TrackLayout
+  GitGraph --> LabelMap
+```
 
 
 # Step: Threading
