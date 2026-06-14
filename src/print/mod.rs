@@ -18,5 +18,6 @@ The gleisbau library adds one new function:
 
 pub mod colors;
 pub mod format;
+pub mod grid;
 pub mod label;
 pub mod unicode;
