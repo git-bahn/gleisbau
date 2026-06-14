@@ -737,9 +737,21 @@ fn get_inserts(
                 if let Some(par_idx) = tracks.indices.get(&par_oid) {
                     let par_info = &tracks.commits[*par_idx];
                     let par_track_idx = par_info.branch_trace.unwrap();
-                    let par_branch_visual = layout
-                        .track_visual(par_track_idx)
-                        .expect("Parent track must have visuals");
+                    let par_branch_visual_opt = layout
+                        .track_visual(par_track_idx);
+                    let Some(par_branch_visual) = par_branch_visual_opt
+                    else {
+                        // Parent does not have visuals.
+                        if layout.contains_commit_index(*par_idx) {
+                            // Parent should have been visualized
+                            // as it is inside the visualisation range
+                            panic!("Parent track must have visuals")
+                        } else {
+                            // Ignore parent outside layout
+                            // TODO visualize this relation
+                            continue;
+                        }
+                    };
                     let par_column = par_branch_visual.column.unwrap();
                     // Determine the sorted range of columns between the current commit and its parent.
                     let column_range = sorted(column, par_column);

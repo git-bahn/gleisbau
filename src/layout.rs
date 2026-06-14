@@ -54,6 +54,10 @@ pub struct TrackLayout {
 }
 
 impl TrackLayout {
+    /// Ask if a commit index is in the layout
+    pub fn contains_commit_index(&self, commit_index: usize) -> bool {
+        self.source.contains(&commit_index)
+    }
     /// Iterate all index into TrackMap.commits specified for this layout.
     ///
     /// *Note*: This include out-of-range index, so use TrackMap.commits.get()
