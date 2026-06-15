@@ -147,7 +147,13 @@ fn build_commit_lines_and_map(
     num_cols: usize,
     the_head: &HeadInfo,
     inserts: &HashMap<usize, CommitRenderPlan>,
-) -> Result<(Vec<Option<String>>, Vec<usize>), String> {
+) -> Result<
+    (
+        Vec<Option<String>>,
+        Vec<usize>, // index_map: from (commit index relative to layout) to grid row
+    ),
+    String,
+> {
     // Compute textwrap options
     let indent1 = settings
         .wrapping
@@ -178,7 +184,7 @@ fn build_commit_lines_and_map(
 
     for idx in layout.iter_commit_index() {
         let info = &tracks.commits[idx];
-        index_map.push(idx + offset);
+        index_map.push(idx + offset - layout.commit_index_start());
 
         // Calculate needed graph inserts (for ranges only)
         let cnt_inserts = if let Some(inserts) = inserts.get(&idx) {
@@ -242,7 +248,7 @@ fn build_commit_map(
     let mut offset = 0;
 
     for idx in layout.iter_commit_index() {
-        index_map.push(idx + offset);
+        index_map.push(idx + offset - layout.commit_index_start());
 
         // Calculate needed graph inserts (for ranges only)
         let cnt_inserts = if let Some(inserts) = inserts.get(&idx) {
@@ -277,14 +283,14 @@ fn build_commit_map(
 /// Initializes the grid and draws all commit/branch connections.
 ///
 /// # Arguments
-/// * index_map  map commit relative to layout start, to a row in the grid
+/// * index_map  map commit index relative to layout start, to a row in the grid
 fn draw_graph_lines(
     settings: &Settings,
     tracks: &TrackMap,
     layout: &TrackLayout,
     num_cols: usize,
     inserts: &HashMap<usize, CommitRenderPlan>,
-    index_map: &[usize], // map commit index to row
+    index_map: &[usize], // map to grid row from relative commit index
     total_rows: usize,
 ) -> Grid {
     let mut grid = Grid::new(
@@ -307,7 +313,7 @@ fn draw_graph_lines(
             .track_visual(trace)
             .expect("All commits in range has precomputed visuals");
         let column = branch_visual.column.unwrap();
-        let idx_map = index_map[idx];
+        let idx_map = index_map[idx - layout.commit_index_start()];
 
         // Draw commit point (DOT or CIRCLE)
         grid.set(
@@ -343,11 +349,12 @@ fn draw_parent_lines(
     grid: &mut Grid,
     info: &CommitInfo,
     inserts: &HashMap<usize, CommitRenderPlan>,
-    index_map: &[usize], // map commit index to row
-    idx: usize,
+    index_map: &[usize], // map relative commit index to row
+    idx: usize,          // absolute commit index
 ) {
     let column = branch_visual.column.unwrap();
-    let idx_map = index_map[idx];
+    // index_map is from commit index relative to layout start
+    let idx_map = index_map[idx - layout.commit_index_start()];
 
     let branch_color = branch_visual.term_color;
 
@@ -367,7 +374,20 @@ fn draw_parent_lines(
             continue;
         };
 
-        let par_idx_map = index_map[*par_idx];
+        // index_map is from relative commit index to row
+        let Some(&par_idx_map) = index_map.get(*par_idx - layout.commit_index_start()) else {
+            // Parent was outside layout
+            // so draw a vertical line to the bottom
+            let idx_bottom = grid.height;
+            vline(
+                grid,
+                (idx_map, idx_bottom),
+                column,
+                branch_color,
+                branch.persistence,
+            );
+            continue;
+        };
         let par_info = &tracks.commits[*par_idx];
         let par_track_idx = par_info.branch_trace.unwrap();
         let par_branch = &tracks.all_branches[par_track_idx];
@@ -388,7 +408,8 @@ fn draw_parent_lines(
             }
         } else {
             let split_index = get_deviate_index(tracks, layout, idx, *par_idx);
-            let split_idx_map = index_map[split_index];
+            // index_map is from relative commit index to row
+            let split_idx_map = index_map[split_index - layout.commit_index_start()];
             let insert_ofs = find_insert_ofs(&inserts[&split_index], idx, *par_idx).unwrap();
             let idx_split = split_idx_map + insert_ofs;
 
