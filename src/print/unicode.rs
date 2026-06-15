@@ -35,13 +35,13 @@ use crate::graph::{BranchInfo, CommitInfo, GitGraph, HeadInfo};
 use crate::layout::BranchVis;
 use crate::layout::TrackLayout;
 use crate::print::format::CommitFormat;
+use crate::print::grid::vline;
+use crate::print::grid::zig_zag_line;
 use crate::print::grid::Grid;
 use crate::print::grid::GridCell;
 use crate::print::grid::CIRCLE;
 use crate::print::grid::DOT;
 use crate::print::grid::SPACE;
-use crate::print::grid::vline;
-use crate::print::grid::zig_zag_line;
 use crate::print::label::list_labels;
 use crate::print::label::Label;
 use crate::print::label::LabelMap;
@@ -53,6 +53,13 @@ use crate::settings::{Characters, Settings};
 const WHITE: u8 = 7; // Normal white
 const HEAD_COLOR: u8 = 14; // Bright cyan
 const HASH_COLOR: u8 = 11; // Bright yellow
+
+/// A set of occupations planned for a row of output.
+/// The ordering is not important.
+type RowRenderPlan = Vec<Occ>;
+
+/// A list of rows planned for output of a commit and lines associated with it.
+type CommitRenderPlan = Vec<RowRenderPlan>;
 
 /**
 UnicodeGraphInfo is a type alias for a tuple containing three elements:
@@ -139,7 +146,7 @@ fn build_commit_lines_and_map(
     layout: &TrackLayout,
     num_cols: usize,
     the_head: &HeadInfo,
-    inserts: &HashMap<usize, Vec<Vec<Occ>>>,
+    inserts: &HashMap<usize, CommitRenderPlan>,
 ) -> Result<(Vec<Option<String>>, Vec<usize>), String> {
     // Compute textwrap options
     let indent1 = settings
@@ -227,8 +234,8 @@ fn build_commit_lines_and_map(
 /// Iterates through commits to compute the index map.
 fn build_commit_map(
     layout: &TrackLayout,
-    inserts: &HashMap<usize, Vec<Vec<Occ>>>, // graphical extra lines
-    commit_height: &[usize],                 // text lines required
+    inserts: &HashMap<usize, CommitRenderPlan>, // graphical extra lines
+    commit_height: &[usize],                    // text lines required
 ) -> Result<Vec<usize>, String> {
     // Compute commit index to output row map
     let mut index_map = vec![];
@@ -276,7 +283,7 @@ fn draw_graph_lines(
     tracks: &TrackMap,
     layout: &TrackLayout,
     num_cols: usize,
-    inserts: &HashMap<usize, Vec<Vec<Occ>>>,
+    inserts: &HashMap<usize, CommitRenderPlan>,
     index_map: &[usize], // map commit index to row
     total_rows: usize,
 ) -> Grid {
@@ -335,8 +342,8 @@ fn draw_parent_lines(
     branch_visual: &BranchVis,
     grid: &mut Grid,
     info: &CommitInfo,
-    inserts: &HashMap<usize, Vec<Vec<Occ>>>,
-    index_map: &[usize],
+    inserts: &HashMap<usize, CommitRenderPlan>,
+    index_map: &[usize], // map commit index to row
     idx: usize,
 ) {
     let column = branch_visual.column.unwrap();
@@ -382,8 +389,8 @@ fn draw_parent_lines(
         } else {
             let split_index = get_deviate_index(tracks, layout, idx, *par_idx);
             let split_idx_map = index_map[split_index];
-            let insert_idx = find_insert_idx(&inserts[&split_index], idx, *par_idx).unwrap();
-            let idx_split = split_idx_map + insert_idx;
+            let insert_ofs = find_insert_ofs(&inserts[&split_index], idx, *par_idx).unwrap();
+            let idx_split = split_idx_map + insert_ofs;
 
             let is_secondary_merge = info.is_merge() && p > 0;
 
@@ -428,9 +435,13 @@ fn create_wrapping_options<'a>(
     Ok(wrapping)
 }
 
-/// Find the index of the insert that connects the two commits
-fn find_insert_idx(inserts: &[Vec<Occ>], child_idx: usize, parent_idx: usize) -> Option<usize> {
-    for (insert_idx, sub_entry) in inserts.iter().enumerate() {
+/// Find the relative row of the insert that connects the two commits
+fn find_insert_ofs(
+    commit_inserts: &CommitRenderPlan,
+    child_idx: usize,
+    parent_idx: usize,
+) -> Option<usize> {
+    for (insert_idx, sub_entry) in commit_inserts.iter().enumerate() {
         for occ in sub_entry {
             if let Occ::Range(i1, i2, _, _) = occ {
                 if *i1 == child_idx && *i2 == parent_idx {
@@ -442,34 +453,40 @@ fn find_insert_idx(inserts: &[Vec<Occ>], child_idx: usize, parent_idx: usize) ->
     None
 }
 
-/// Calculates required additional rows to visually connect commits that
-/// are not direct descendants in the main commit list. These "inserts"
-//  represent the horizontal lines in the graph.
-///
-/// # Arguments (TODO update this)
-///
-/// * `graph`: A reference to the `GitGraph` structure containing the
-//             commit and branch information.
-/// * `compact`: A boolean indicating whether to use a compact layout,
-//               potentially merging some insertions with commits.
-///
-/// # Returns
-///
-/// A `HashMap` where the keys are the indices of commits in the
-/// `tracks.commits` vector, and the values are vectors of vectors
-/// of `Occ`. Each inner vector represents a potential row of
-/// insertions needed *before* the commit at the key index. The
-/// `Occ` enum describes what occupies a cell in that row
-/// (either a commit or a range representing a connection).
-///
+/** Make a plan for drawing commits and lines.
+
+    Calculates required additional rows to visually connect commits that
+    are not direct descendants in the main commit list. These "inserts"
+    represent the horizontal lines in the graph.
+
+    ## Arguments
+
+    * `tracks`: The track topology used for the layout.
+    * `layout`: The layout that should be drawn.
+    * `compact`: Enable merging insertions with commits to save place.
+
+    ## Returns
+
+    A `HashMap` where the keys are the indices of commits in the
+    `tracks.commits` vector, and the values are a plan for rendering
+    that commit. See [CommitRenderPlan]
+
+    # Algorithm
+
+    The internal rendering algorithm follows these steps:
+
+    * Make a plan (called "inserts") for where to draw lines.
+    * Follow the plan to draw lines and symbols on a [Grid].
+    * Print the grid as ANSI formatted text for a terminal.
+*/
 fn get_inserts(
     tracks: &TrackMap,
     layout: &TrackLayout,
     compact: bool,
-) -> HashMap<usize, Vec<Vec<Occ>>> {
+) -> HashMap<usize, CommitRenderPlan> {
     // Initialize an empty HashMap to store the required insertions. The key is the commit
     // index, and the value is a vector of rows, where each row is a vector of Occupations (`Occ`).
-    let mut inserts: HashMap<usize, Vec<Vec<Occ>>> = HashMap::new();
+    let mut inserts: HashMap<usize, CommitRenderPlan> = HashMap::new();
 
     // First, for each commit, we initialize an entry in the `inserts`
     // map with a single row containing the commit itself. This ensures
@@ -510,10 +527,8 @@ fn get_inserts(
                 if let Some(par_idx) = tracks.indices.get(&par_oid) {
                     let par_info = &tracks.commits[*par_idx];
                     let par_track_idx = par_info.branch_trace.unwrap();
-                    let par_branch_visual_opt = layout
-                        .track_visual(par_track_idx);
-                    let Some(par_branch_visual) = par_branch_visual_opt
-                    else {
+                    let par_branch_visual_opt = layout.track_visual(par_track_idx);
+                    let Some(par_branch_visual) = par_branch_visual_opt else {
                         // Parent does not have visuals.
                         if layout.contains_commit_index(*par_idx) {
                             // Parent should have been visualized
@@ -626,7 +641,7 @@ fn get_inserts(
 /// Returns `true` if there is an unallowable visual collision in this row,
 /// and `false` if the connection can safely occupy this row.
 fn has_overlap(
-    sub_entry: &[Occ],
+    sub_entry: &RowRenderPlan,
     column_range: (usize, usize),
     compact: bool,
     info_is_merge: bool,
@@ -641,16 +656,21 @@ fn has_overlap(
             match other_range {
                 // If the other occupation is a commit.
                 Occ::Commit(target_index, _) => {
-                    // In compact mode, we might allow overlap with the commit itself
-                    // for merge commits (specifically the second parent) to keep the
+                    // In compact mode, we allow overlap with the commit itself
+                    // for non-primary parents of merge commits to keep the
                     // graph tighter.
-                    if !compact || !info_is_merge || idx != *target_index || p == 0 {
+                    if !compact  // in non-compact mode a commit always collides
+                        || !info_is_merge // non-merge commit always collide
+                        || idx != *target_index // other commits always collide
+                        || p == 0
+                    // primary parent always collide
+                    {
                         return true;
                     }
                 }
-                // If the other occupation is a range (another connection).
+                // If the other occupation is a connection between commits.
                 Occ::Range(o_idx, o_par_idx, _, _) => {
-                    // Avoid overlap with connections between the same commits.
+                    // Ignore overlap with connections to the current commit.
                     if idx != *o_idx && par_idx != o_par_idx {
                         return true;
                     }
@@ -992,7 +1012,11 @@ pub fn format_branches(
     branch_str
 }
 
-/// Occupied row ranges
+/** Occupied columns.
+
+The occupation can either be a Commit, which takes just one column,
+or a Range, which takes a range of columns. Range is used for horizontal lines.
+*/
 enum Occ {
     /// Horizontal position of commit markers
     // First  field (usize): The index of a commit within the tracks.commits vector.

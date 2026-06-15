@@ -324,11 +324,6 @@ fn update_right_cell_backward(grid: &mut Grid, index: usize, from_2: usize, colo
     }
 }
 
-
-
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
