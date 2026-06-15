@@ -77,6 +77,7 @@ pub type UnicodeGraphInfo = (Vec<String>, Vec<String>, Vec<usize>);
 
 /// Creates a text-based visual representation of a graph.
 pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGraphInfo, String> {
+    log::trace!("print_unicode - legacy API");
     let repo = &graph.repository;
     let tracks = &graph.tracks;
     let layout = &graph.layout;
@@ -737,6 +738,7 @@ pub fn print_graph_terminal(
     layout: &TrackLayout,
     commit_text_height: &[usize], // [0] corresponds to track commit layout.commit_index_start()
 ) -> GraphLines {
+    log::trace!("print_graph_terminal(_,_,_,_)");
     if tracks.all_branches.is_empty() {
         return GraphLines::empty();
     }

@@ -60,6 +60,7 @@ pub struct Grid {
 
 impl Grid {
     pub fn new(width: usize, height: usize, initial: GridCell) -> Self {
+        log::trace!("Grid::new({},{},_)", width, height);
         Grid {
             width,
             height,

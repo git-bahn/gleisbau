@@ -61,6 +61,7 @@ pub struct Builder {
 
 impl Builder {
     pub fn new() -> Self {
+        log::trace!("Builder::new()");
         Builder::default()
     }
     pub fn with_repository(mut self, repository: Repository) -> Self {
@@ -108,6 +109,7 @@ impl GitGraph {
         refspecs: Vec<String>,
     ) -> Result<Self, String> {
         #![doc = include_str!("../docs/branch_assignment.md")]
+        log::trace!("GitGraph::new() - legacy API");
         let mut stashes = HashSet::new();
         repository
             .stash_foreach(|_, _, oid| {

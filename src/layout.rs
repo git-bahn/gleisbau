@@ -152,6 +152,7 @@ pub fn layout_track_range(
     range: Range<usize>,
     settings: &Settings,
 ) -> Result<TrackLayout, String> {
+    log::trace!("layout_track_range(_,({},{}),_)", &range.start, &range.end);
     let mut branch_visuals = Vec::new();
     let mut track_visual_map = HashMap::new();
 

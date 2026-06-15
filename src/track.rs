@@ -56,6 +56,7 @@ impl<Oid: Clone + Eq + Hash> Default for TrackMap<Oid> {
 impl<Oid: Clone + Eq + Hash> TrackMap<Oid> {
     /// Create an empty TrackMap
     pub fn new() -> Self {
+        log::trace!("TrackMap::new()");
         Self {
             commits: vec![],
             indices: HashMap::new(),
