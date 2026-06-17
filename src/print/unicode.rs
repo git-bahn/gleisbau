@@ -183,7 +183,6 @@ fn build_commit_lines_and_map(
     let mut offset = 0;
 
     for idx in layout.iter_commit_index() {
-        let info = &tracks.commits[idx];
         index_map.push(idx + offset - layout.commit_index_start());
 
         // Calculate needed graph inserts (for ranges only)
@@ -207,22 +206,26 @@ fn build_commit_lines_and_map(
             None
         };
 
-        let commit = &repository
-            .find_commit(info.oid)
-            .map_err(|err| err.message().to_string())?;
+        let lines;
+        if let Some(info) = tracks.commits.get(idx) {
+            let commit = &repository
+                .find_commit(info.oid)
+                .map_err(|err| err.message().to_string())?;
 
-        // Format the commit message lines
-        let lines = format(
-            &settings.format,
-            layout,
-            &labels,
-            commit,
-            info,
-            head,
-            settings.colored,
-            wrap_options,
-        )?;
-
+            // Format the commit message lines
+            lines = format(
+                &settings.format,
+                layout,
+                &labels,
+                commit,
+                info,
+                head,
+                settings.colored,
+                wrap_options,
+            )?;
+        } else {
+            lines = vec![];
+        }
         let num_lines = if lines.is_empty() { 0 } else { lines.len() - 1 };
         let max_inserts = max(cnt_inserts, num_lines);
         let add_lines = max_inserts - num_lines;
@@ -304,7 +307,9 @@ fn draw_graph_lines(
     );
 
     for idx in layout.iter_commit_index() {
-        let info = &tracks.commits[idx];
+        let Some(info) = tracks.commits.get(idx) else {
+            continue;
+        };
         let Some(trace) = info.branch_trace else {
             continue;
         };
@@ -513,7 +518,12 @@ fn get_inserts(
     // map with a single row containing the commit itself. This ensures
     // that every commit has a position in the grid.
     for idx in layout.iter_commit_index() {
-        let info = &tracks.commits[idx];
+        let Some(info) = tracks.commits.get(idx) else {
+            // layout is too far down, so it includes index that are not
+            // in TrackMap. Provide an empty render plan for that row.
+            inserts.insert(idx, vec![vec![]]);
+            continue;
+        };
         // Get the visual column assigned to the branch of this commit. Unwrap is safe here
         // because `branch_trace` should always point to a valid branch with an assigned column
         // for commits that are included in the filtered graph.
@@ -531,7 +541,9 @@ fn get_inserts(
     // needed between parents that are not directly adjacent in the
     // `tracks.commits` list.
     for idx in layout.iter_commit_index() {
-        let info = &tracks.commits[idx];
+        let Some(info) = tracks.commits.get(idx) else {
+            continue;
+        };
         // If the commit has a branch trace (meaning it belongs to a visualized branch).
         if let Some(trace) = info.branch_trace {
             // Get the `BranchInfo` for the current commit's branch.
