@@ -110,7 +110,11 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
     )?;
 
     // Draw the graph on a grid
-    let total_rows = text_lines.len();
+    // Assume that each index in CommitRenderPlan is a unique row
+    let total_rows = inserts
+        .iter()
+        .map(|commit_entry| commit_entry.1.len())
+        .sum();
     let mut grid = draw_graph_lines(
         settings, tracks, layout, num_cols, &inserts, &index_map, total_rows,
     );
@@ -808,15 +812,16 @@ pub fn print_graph_terminal(
     // Compute grid size
     let num_cols = calculate_graph_dimensions(layout);
     let min_row_height = 1;
-    let rows_without_commit_text = layout
-        .commit_count()
-        .saturating_sub(commit_text_height.len());
-    let total_rows = commit_text_height
-        .iter()
-        .map(|&x| max(min_row_height, x))
-        .take(layout.commit_count())
-        .sum::<usize>()
-        + rows_without_commit_text * min_row_height;
+    let total_rows = layout
+        .iter_commit_index()
+        .map(|cinx| {
+            let commit_height = inserts[&cinx].len();
+            let text_height = commit_text_height
+                .get(cinx - layout.commit_index_start())
+                .unwrap_or(&0);
+            max(max(*text_height, commit_height), min_row_height)
+        })
+        .sum();
 
     // Draw graph as lines on a grid
     let mut grid = draw_graph_lines(
@@ -1050,6 +1055,7 @@ pub fn format_branches(
 The occupation can either be a Commit, which takes just one column,
 or a Range, which takes a range of columns. Range is used for horizontal lines.
 */
+#[derive(Debug)]
 enum Occ {
     /// Horizontal position of commit markers
     // First  field (usize): The index of a commit within the tracks.commits vector.
