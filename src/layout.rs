@@ -86,7 +86,20 @@ impl TrackLayout {
     }
 }
 
-/// Branch properties for visualization.
+/** Branch properties for visualization.
+
+A track / branch is visualized as a vertical line, with some kind of
+continuation at the ends. This can be a simple stop, a link to some other
+track or some indicator that the track continues outside the commit range
+that was visualized.
+
+## Order Group
+Placing a track is a two step process: First find the track placement
+within an order group of tracks. When all tracks have been placed within
+their order group, compute the absolute column. Order group definition and their
+order is determined by a sequence of regex from [BranchSettings.order](crate::settings::BranchSettings.order)
+The first regex to match the track name is the order group for that track.
+*/
 pub struct BranchVis {
     /// The branch's column group (left to right)
     pub order_group: usize,
@@ -206,6 +219,7 @@ pub fn layout_track_range(
         {
             branch_visuals[vis_idx].row_range.0 = merge_target_index;
         }
+
         // Resolve Target Order Group
         if let Some(target_idx) = branch.target_branch {
             // Check if the target branch has a visual in our current layout
