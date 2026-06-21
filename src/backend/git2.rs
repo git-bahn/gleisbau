@@ -294,7 +294,7 @@ fn extract_actual_branches(
         .iter()
         .filter_map(|(br, tp)| {
             let reference = br.get();
-            let name_full = reference.name()?;
+            let name_full = reference.name().ok()?;
             let target_oid = reference.target()?;
 
             // Strip prefix: "refs/heads/" (11) or "refs/remotes/" (13)
@@ -357,12 +357,13 @@ fn extract_merge_branches(
         let commit = repository
             .find_commit(*child_oid)
             .map_err(|err| err.message().to_string())?;
+        let summary = commit.summary().map_err(|err| err.message().to_string())?;
 
         merge_branches.extend(create_merge_branches(
             &settings.merge_patterns,
             &settings.branches.persistence,
             child_oid,
-            commit.summary().unwrap_or(""),
+            summary.unwrap_or(""),
             &info.parents,
             idx + 1, // End index typically points to the commit
         ));

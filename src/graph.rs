@@ -257,7 +257,7 @@ pub struct HeadInfo {
 }
 impl HeadInfo {
     fn new(head: &Reference) -> Result<Self, String> {
-        let name = head.name().ok_or_else(|| "No name for HEAD".to_string())?;
+        let name = head.name().unwrap_or("No name for HEAD");
         let name = if name == "HEAD" {
             name.to_string()
         } else {

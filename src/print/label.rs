@@ -109,7 +109,7 @@ fn extract_branches(
 
     let mut counter: usize = 0;
     for (br, tp) in actual_branches {
-        let Some(n) = br.get().name() else {
+        let Some(n) = br.get().name().ok() else {
             continue;
         };
         let Some(t) = br.get().target() else {
