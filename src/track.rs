@@ -6,6 +6,7 @@ Fortunately it can be computed incrementally.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -341,7 +342,7 @@ pub struct Builder<Oid: Clone + Eq + Hash> {
     /// that should be added when it is found.
     missing_parents: HashMap<Oid, MissingParent<Oid>>,
 }
-impl<Oid: Clone + Eq + Hash> Builder<Oid> {
+impl<Oid: Clone + Eq + Hash + Debug> Builder<Oid> {
     /// Create a builder for the specified TrackMap
     pub fn new(target: Rc<RefCell<TrackMap<Oid>>>) -> Self {
         Self {
@@ -374,6 +375,9 @@ impl<Oid: Clone + Eq + Hash> Builder<Oid> {
     /// - message: Child commit message. If child is a merge this may give
     ///            a name to a merged branch.
     /// - parents: List of parent Oid.
+    ///
+    /// *Note*: The function panics if a parent is added before its child.
+    /// You must walk the commit graph in topological order from leaf towards root.
     pub fn add_commit(&mut self, id: Oid, message: String, parents: Vec<Oid>) {
         let merge_patterns = self.merge_patterns.clone();
 
@@ -415,6 +419,24 @@ impl<Oid: Clone + Eq + Hash> Builder<Oid> {
             .remove(&id)
             .unwrap_or_default()
             .set_commit_branch(&mut *self.tracks.borrow_mut(), commit_index);
+
+        // 1.3. Check commit order
+
+        for (p, parent_oid) in parents.iter().enumerate() {
+            if let Some(parent_index) = self.tracks.borrow().indices.get(parent_oid) {
+                if *parent_index >= commit_index {
+                    log::error!(
+                        "Commit #{} {:?} has parent[{}] which points back at commit #{} {:?}",
+                        commit_index,
+                        &id,
+                        p,
+                        parent_index,
+                        parent_oid,
+                    );
+                    panic!("A parent was added before its child");
+                }
+            }
+        }
 
         //
         //   2. Parents
