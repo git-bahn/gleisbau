@@ -133,6 +133,7 @@ pub fn configure_revwalk(
     walk: &mut git2::Revwalk,
     start_point: Option<String>,
     refspecs: &[String],
+    include_remote: bool,
 ) -> Result<(), String> {
     if !refspecs.is_empty() {
         let mut resolved_oids = Vec::with_capacity(refspecs.len());
@@ -178,7 +179,8 @@ pub fn configure_revwalk(
         walk.push(object.id())
             .map_err(|err| err.message().to_string())?;
     } else {
-        walk.push_glob("*")
+        let glob = if include_remote { "*" } else { "refs/heads/*" };
+        walk.push_glob(glob)
             .map_err(|err| err.message().to_string())?;
     }
     Ok(())
