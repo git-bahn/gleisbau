@@ -123,7 +123,13 @@ impl GitGraph {
         walk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
             .map_err(|err| err.message().to_string())?;
 
-        track::configure_revwalk(&repository, &mut walk, start_point, &refspecs, settings.include_remote)?;
+        track::configure_revwalk(
+            &repository,
+            &mut walk,
+            start_point,
+            &refspecs,
+            settings.include_remote,
+        )?;
 
         if repository.is_shallow() {
             return Err("ERROR: gleisbau does not support shallow clones due to a missing feature in the underlying libgit2 library.".to_string());
