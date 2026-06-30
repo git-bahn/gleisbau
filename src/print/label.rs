@@ -129,7 +129,7 @@ fn extract_branches(
         let (term_color, svg_color) = get_term_svg_color(settings, name, counter);
         counter += 1;
 
-        labels.add_label(t.clone(), name, label_type, term_color, svg_color);
+        labels.add_label(t, name, label_type, term_color, svg_color);
     }
     Ok(())
 }
@@ -148,8 +148,7 @@ fn extract_tags(
         })
         .map_err(|err| err.message().to_string())?;
 
-    let mut counter: usize = 0;
-    for (oid, name_bytes) in tags_raw {
+    for (counter, (oid, name_bytes)) in tags_raw.into_iter().enumerate() {
         // Convert tag name bytes to a UTF-8 string. Tags typically start with "refs/tags/".
         let name = std::str::from_utf8(&name_bytes[5..]).map_err(|err| err.to_string())?;
 
@@ -161,9 +160,8 @@ fn extract_tags(
                 repository.find_commit(oid).map(|_| oid))
             .map_err(|err| err.to_string())?;
 
-        let oid = target.clone();
+        let oid = target;
         let (term_color, svg_color) = get_term_svg_color(settings, name, counter);
-        counter += 1;
 
         labels.add_label(oid, name, LabelType::Tag, term_color, svg_color);
     }

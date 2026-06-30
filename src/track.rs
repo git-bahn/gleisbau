@@ -295,8 +295,8 @@ pub fn assign_sources_targets(
     branches: &mut [BranchInfo],
 ) {
     // 1. Identify Target Branches (where does this branch merge INTO?)
-    for idx in 0..branches.len() {
-        branches[idx].target_branch = branches[idx]
+    for branch in branches.iter_mut() {
+        branch.target_branch = branch
             .merge_target
             .and_then(|oid| indices.get(&oid))
             .and_then(|idx| commits.get(*idx))

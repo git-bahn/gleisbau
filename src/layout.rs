@@ -24,8 +24,6 @@ const ORIGIN: &str = "origin/";
     which will assign columns and colours to the tracks.
 */
 pub struct TrackLayout {
-    // Specifies which commits are rendered
-    source: Range<usize>,
     // Map a TrackMap.branch index to a TrackLayout.branch_visual index
     track_visual: HashMap<usize, usize>,
     // Visuals for all tracks in the rendered range
@@ -98,7 +96,7 @@ pub fn layout_track_range(
         };
 
         // If the track does not yet have a visualization, create it
-        if !track_visual_map.contains_key(&b_idx) {
+        if let std::collections::hash_map::Entry::Vacant(e) = track_visual_map.entry(b_idx) {
             let branch_info = &track_map.all_branches[b_idx];
 
             // We increment the counter only when a new visual is needed
@@ -109,7 +107,7 @@ pub fn layout_track_range(
 
             let vis_idx = branch_visuals.len();
             branch_visuals.push(visual_data);
-            track_visual_map.insert(b_idx, vis_idx);
+            e.insert(vis_idx);
         }
     }
 
@@ -139,7 +137,6 @@ pub fn layout_track_range(
 
     // Pass 3: The Packing Algorithm
     let mut layout = TrackLayout {
-        source: range,
         track_visual: track_visual_map,
         branch_visual: branch_visuals,
     };
@@ -147,7 +144,7 @@ pub fn layout_track_range(
         BranchOrder::ShortestFirst(fwd) => (true, fwd),
         BranchOrder::LongestFirst(fwd) => (false, fwd),
     };
-    assign_branch_columns(&track_map, &mut layout, settings, shortest_first, forward);
+    assign_branch_columns(track_map, &mut layout, settings, shortest_first, forward);
 
     Ok(layout)
 }
@@ -308,7 +305,7 @@ type Occupation = Vec<Vec<Vec<(usize, usize)>>>;
 fn assign_group_columns(
     order_group_count: usize,
     branches_sort: BranchSort,
-    branch_list: &Vec<BranchInfo>,
+    branch_list: &[BranchInfo],
     layout: &mut TrackLayout,
 ) -> Occupation {
     let mut occupied: Occupation = vec![vec![]; order_group_count];
