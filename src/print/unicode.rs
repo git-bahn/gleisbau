@@ -845,7 +845,7 @@ fn print_graph(
     let mut g_lines = vec![];
     let mut t_lines = vec![];
 
-    for (row, line) in grid.data.chunks(grid.width).zip(text_lines.into_iter()) {
+    for (row, line) in grid.data.chunks(grid.width).zip(text_lines) {
         let mut g_out = String::new();
         let mut t_out = String::new();
 

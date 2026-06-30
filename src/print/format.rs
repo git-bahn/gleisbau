@@ -162,10 +162,8 @@ impl<'a> CommitFieldFormatter<'a> {
                     self.add_line();
                 }
             }
-            MODE_MINUS => {
-                if !field_has_content {
-                    *self.out = remove_empty_lines(self.lines, self.out.clone());
-                }
+            MODE_MINUS if !field_has_content => {
+                *self.out = remove_empty_lines(self.lines, self.out.clone());
             }
             _ => {}
         }
