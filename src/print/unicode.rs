@@ -81,7 +81,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
 
     // 1. Calculate dimensions and inserts
     let num_cols = calculate_graph_dimensions(&graph.layout);
-    let inserts = get_inserts(&tracks, &layout, settings.compact);
+    let inserts = get_inserts(&tracks, layout, settings.compact);
 
     let (indent1, indent2) = if let Some((_, ind1, ind2)) = settings.wrapping {
         (" ".repeat(ind1.unwrap_or(0)), " ".repeat(ind2.unwrap_or(0)))
@@ -97,7 +97,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
         settings,
         repo,
         &tracks,
-        &layout,
+        layout,
         &graph.head,
         &inserts,
         &wrap_options,
@@ -107,7 +107,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
     let total_rows = text_lines.len();
 
     let mut grid = draw_graph_lines(
-        settings, &tracks, &layout, num_cols, &inserts, &index_map, total_rows,
+        settings, &tracks, layout, num_cols, &inserts, &index_map, total_rows,
     );
 
     // 5. Handle reverse order
@@ -278,6 +278,7 @@ fn draw_graph_lines(
     grid
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_parent_lines(
     tracks: &TrackMap,
     layout: &TrackLayout,
@@ -844,7 +845,7 @@ fn print_graph(
     let mut g_lines = vec![];
     let mut t_lines = vec![];
 
-    for (row, line) in grid.data.chunks(grid.width).zip(text_lines.into_iter()) {
+    for (row, line) in grid.data.chunks(grid.width).zip(text_lines) {
         let mut g_out = String::new();
         let mut t_out = String::new();
 
@@ -878,6 +879,7 @@ fn print_graph(
 }
 
 /// Format a commit.
+#[allow(clippy::too_many_arguments)]
 fn format(
     format: &CommitFormat,
     layout: &TrackLayout,
@@ -920,7 +922,7 @@ pub fn format_branches(
     let head_str = "HEAD ->";
     if let Some(head) = head {
         if !head.is_branch {
-            branch_str.push_str(" ");
+            branch_str.push(' ');
             append_str_col(&mut branch_str, head_str, color, HEAD_COLOR);
         }
     }
@@ -932,7 +934,7 @@ pub fn format_branches(
         .filter(|label| {
             label.kind == LabelType::LocalBranch || label.kind == LabelType::RemoteBranch
         })
-        .map(|label| label.clone())
+        .cloned()
         .collect();
 
     if !commit_branches.is_empty() {
@@ -953,7 +955,7 @@ pub fn format_branches(
             if let Some(head) = head {
                 if idx == 0 && head.is_branch {
                     append_str_col(&mut branch_str, head_str, color, HEAD_COLOR);
-                    branch_str.push_str(" ");
+                    branch_str.push(' ');
                 }
             }
 
@@ -963,7 +965,7 @@ pub fn format_branches(
                 branch_str.push_str(", ");
             }
         }
-        branch_str.push_str(")");
+        branch_str.push(')');
     }
 
     let commit_tags: Vec<_> = labels
@@ -986,7 +988,7 @@ pub fn format_branches(
                 branch_str.push_str(", ");
             }
         }
-        branch_str.push_str("]");
+        branch_str.push(']');
     }
 
     branch_str

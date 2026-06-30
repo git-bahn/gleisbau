@@ -123,7 +123,13 @@ impl GitGraph {
         walk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
             .map_err(|err| err.message().to_string())?;
 
-        track::configure_revwalk(&repository, &mut walk, start_point, &refspecs)?;
+        track::configure_revwalk(
+            &repository,
+            &mut walk,
+            start_point,
+            &refspecs,
+            settings.include_remote,
+        )?;
 
         if repository.is_shallow() {
             return Err("ERROR: gleisbau does not support shallow clones due to a missing feature in the underlying libgit2 library.".to_string());
@@ -171,10 +177,10 @@ impl GitGraph {
         };
 
         // Layout tracks in 2D
-        let layout = layout::layout_track_range(&tracks, all_commits, &settings)?;
+        let layout = layout::layout_track_range(&tracks, all_commits, settings)?;
 
         // Extract labels for formatting commits
-        let labels = label::list_labels(&settings, &repository)?;
+        let labels = label::list_labels(settings, &repository)?;
 
         Ok(GitGraph {
             repository,
