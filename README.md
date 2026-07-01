@@ -25,7 +25,6 @@ A library to visualize Git history graphs in a comprehensible way, following dif
 
 * Summaries of merge commits (i.e. 1st line of message) should not be modified! gleisbau needs them to categorize merged branches.
 * Supports only the primary remote repository `origin`.
-* Does currently not support "octopus merges" (i.e. no more than 2 parents)
 
 ## Contributing
 
