@@ -81,7 +81,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
 
     // 1. Calculate dimensions and inserts
     let num_cols = calculate_graph_dimensions(&graph.layout);
-    let inserts = get_inserts(&tracks, layout, settings.compact);
+    let inserts = get_inserts(tracks, layout, settings.compact);
 
     let (indent1, indent2) = if let Some((_, ind1, ind2)) = settings.wrapping {
         (" ".repeat(ind1.unwrap_or(0)), " ".repeat(ind2.unwrap_or(0)))
@@ -96,7 +96,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
     let (mut text_lines, index_map) = build_commit_lines_and_map(
         settings,
         repo,
-        &tracks,
+        tracks,
         layout,
         &graph.head,
         &inserts,
@@ -107,7 +107,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
     let total_rows = text_lines.len();
 
     let mut grid = draw_graph_lines(
-        settings, &tracks, layout, num_cols, &inserts, &index_map, total_rows,
+        settings, tracks, layout, num_cols, &inserts, &index_map, total_rows,
     );
 
     // 5. Handle reverse order
