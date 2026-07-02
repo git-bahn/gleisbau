@@ -18,28 +18,28 @@
 //! merges (multiple parents), and show the remaining parent relations.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::rc::Rc;
 
 pub use git2::{BranchType, Commit, Error, Oid, Reference, Repository};
 
+use crate::backend;
 use crate::layout;
 use crate::print::label;
 use crate::settings::Settings;
-use crate::track;
 
+pub use crate::backend::git2::BranchInfo;
+pub use crate::backend::git2::CommitInfo;
+pub use crate::backend::git2::TrackMap;
 pub use crate::layout::BranchVis;
 pub use crate::layout::TrackLayout;
 pub use crate::print::label::LabelMap;
-pub use crate::track::BranchInfo;
-pub use crate::track::CommitInfo;
-pub use crate::track::TrackMap;
 
 /// Represents a git history graph.
+/// Legacy API, will be deprecated.
 pub struct GitGraph {
     pub repository: Repository,
-    /// Track structure, may be updated by a separate thread
-    pub tracks: Arc<Mutex<TrackMap>>,
+    /// Track structure
+    pub tracks: TrackMap,
     /// Layout of all commits in track structure
     pub layout: TrackLayout,
     /// Labels to show next to commits
@@ -51,15 +51,15 @@ pub struct GitGraph {
 /** Builder of a GitGraph struct. This handles one-time processing of the
 repository. */
 #[derive(Default)]
-pub struct Builder<'a> {
+pub struct Builder {
     repository: Option<Repository>,
-    settings: Option<&'a Settings>,
+    settings: Option<Rc<Settings>>,
     start_point: Option<String>,
     max_count: Option<usize>,
     refspecs: Vec<String>,
 }
 
-impl<'a> Builder<'a> {
+impl Builder {
     pub fn new() -> Self {
         Builder::default()
     }
@@ -67,7 +67,7 @@ impl<'a> Builder<'a> {
         self.repository = Some(repository);
         self
     }
-    pub fn with_settings(mut self, settings: &'a Settings) -> Self {
+    pub fn with_settings(mut self, settings: Rc<Settings>) -> Self {
         self.settings = Some(settings);
         self
     }
@@ -86,7 +86,7 @@ impl<'a> Builder<'a> {
     pub fn build(self) -> Result<GitGraph, String> {
         GitGraph::new(
             self.repository.expect("You must specify repository"),
-            self.settings.expect("You must specify settings"),
+            &self.settings.expect("You must specify settings"),
             self.start_point,
             self.max_count,
             self.refspecs,
@@ -123,7 +123,7 @@ impl GitGraph {
         walk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
             .map_err(|err| err.message().to_string())?;
 
-        track::configure_revwalk(
+        backend::git2::configure_revwalk(
             &repository,
             &mut walk,
             start_point,
@@ -152,19 +152,19 @@ impl GitGraph {
                 if !stashes.contains(&oid) {
                     let commit = repository.find_commit(oid).unwrap();
 
-                    commits.push(CommitInfo::new(&commit));
+                    commits.push(backend::git2::commit_info_new(&commit));
                     indices.insert(oid, idx);
                     idx += 1;
                 }
             }
         }
 
-        track::assign_children(&mut commits, &indices);
+        backend::git2::assign_children(&mut commits, &indices);
 
         let mut all_branches =
-            track::assign_branches(&repository, &mut commits, &indices, settings)?;
-        track::correct_fork_merges(&commits, &indices, &mut all_branches)?;
-        track::assign_sources_targets(&commits, &indices, &mut all_branches);
+            backend::git2::assign_branches(&repository, &mut commits, &indices, settings)?;
+        backend::git2::correct_fork_merges(&commits, &indices, &mut all_branches)?;
+        backend::git2::assign_sources_targets(&commits, &indices, &mut all_branches);
 
         let (filtered_commits, filtered_indices) =
             remove_commits_not_on_a_branch(commits, indices, &mut all_branches);
@@ -184,7 +184,7 @@ impl GitGraph {
 
         Ok(GitGraph {
             repository,
-            tracks: Arc::new(Mutex::new(tracks)),
+            tracks,
             layout,
             labels,
             head,

@@ -12,12 +12,14 @@
 pub use git2::Repository;
 use std::path::Path;
 
+pub mod backend;
 pub mod config;
 pub mod graph;
 pub mod layout;
 pub mod print;
 pub mod settings;
 pub mod track;
+pub mod u32_index;
 
 // Documentation only module,
 // see https://rustprojectprimer.com/documentation/rustdoc.html

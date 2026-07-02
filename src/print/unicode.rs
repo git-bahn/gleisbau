@@ -11,6 +11,7 @@ use itertools::Itertools;
 use textwrap::Options;
 use yansi::Paint;
 
+use crate::backend::git2::TrackMap;
 use crate::graph::{BranchInfo, CommitInfo, GitGraph, HeadInfo};
 use crate::layout::BranchVis;
 use crate::layout::TrackLayout;
@@ -20,7 +21,6 @@ use crate::print::label::Label;
 use crate::print::label::LabelMap;
 use crate::print::label::LabelType;
 use crate::settings::{Characters, Settings};
-use crate::track::TrackMap;
 
 // Symbols used in [Grid]
 
@@ -72,7 +72,7 @@ pub type UnicodeGraphInfo = (Vec<String>, Vec<String>, Vec<usize>);
 /// Creates a text-based visual representation of a graph.
 pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGraphInfo, String> {
     let repo = &graph.repository;
-    let tracks = graph.tracks.lock().unwrap();
+    let tracks = &graph.tracks;
     let layout = &graph.layout;
 
     if tracks.all_branches.is_empty() {
@@ -81,7 +81,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
 
     // 1. Calculate dimensions and inserts
     let num_cols = calculate_graph_dimensions(&graph.layout);
-    let inserts = get_inserts(&tracks, layout, settings.compact);
+    let inserts = get_inserts(tracks, layout, settings.compact);
 
     let (indent1, indent2) = if let Some((_, ind1, ind2)) = settings.wrapping {
         (" ".repeat(ind1.unwrap_or(0)), " ".repeat(ind2.unwrap_or(0)))
@@ -96,7 +96,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
     let (mut text_lines, index_map) = build_commit_lines_and_map(
         settings,
         repo,
-        &tracks,
+        tracks,
         layout,
         &graph.head,
         &inserts,
@@ -107,7 +107,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
     let total_rows = text_lines.len();
 
     let mut grid = draw_graph_lines(
-        settings, &tracks, layout, num_cols, &inserts, &index_map, total_rows,
+        settings, tracks, layout, num_cols, &inserts, &index_map, total_rows,
     );
 
     // 5. Handle reverse order
@@ -168,7 +168,8 @@ fn build_commit_lines_and_map<'a>(
     let mut text_lines = vec![];
     let mut offset = 0;
 
-    for (idx, info) in tracks.commits.iter().enumerate() {
+    for idx in layout.iter_commit_index() {
+        let info = &tracks.commits[idx];
         index_map.push(idx + offset);
 
         // Calculate needed graph inserts (for ranges only)
@@ -242,7 +243,8 @@ fn draw_graph_lines(
         },
     );
 
-    for (idx, info) in tracks.commits.iter().enumerate() {
+    for idx in layout.iter_commit_index() {
+        let info = &tracks.commits[idx];
         let Some(trace) = info.branch_trace else {
             continue;
         };
@@ -257,7 +259,7 @@ fn draw_graph_lines(
         grid.set(
             column * 2,
             idx_map,
-            if info.is_merge { CIRCLE } else { DOT },
+            if info.is_merge() { CIRCLE } else { DOT },
             branch_visual.term_color,
             branch.persistence,
         );
@@ -320,7 +322,7 @@ fn draw_parent_lines(
             .expect("Parent must have visuals");
         let par_column = par_branch_visual.column.unwrap();
 
-        let (color, pers) = if info.is_merge {
+        let (color, pers) = if info.is_merge() {
             (par_branch_visual.term_color, par_branch.persistence)
         } else {
             (branch_color, branch.persistence)
@@ -336,7 +338,7 @@ fn draw_parent_lines(
             let insert_idx = find_insert_idx(&inserts[&split_index], idx, *par_idx).unwrap();
             let idx_split = split_idx_map + insert_idx;
 
-            let is_secondary_merge = info.is_merge && p > 0;
+            let is_secondary_merge = info.is_merge() && p > 0;
 
             let row123 = (idx_map, idx_split, par_idx_map);
             let col12 = (column, par_column);
@@ -640,7 +642,8 @@ fn get_inserts(
     // First, for each commit, we initialize an entry in the `inserts`
     // map with a single row containing the commit itself. This ensures
     // that every commit has a position in the grid.
-    for (idx, info) in tracks.commits.iter().enumerate() {
+    for idx in layout.iter_commit_index() {
+        let info = &tracks.commits[idx];
         // Get the visual column assigned to the branch of this commit. Unwrap is safe here
         // because `branch_trace` should always point to a valid branch with an assigned column
         // for commits that are included in the filtered graph.
@@ -657,7 +660,8 @@ fn get_inserts(
     // Now, iterate through the commits again to identify connections
     // needed between parents that are not directly adjacent in the
     // `tracks.commits` list.
-    for (idx, info) in tracks.commits.iter().enumerate() {
+    for idx in layout.iter_commit_index() {
+        let info = &tracks.commits[idx];
         // If the commit has a branch trace (meaning it belongs to a visualized branch).
         if let Some(trace) = info.branch_trace {
             // Get the `BranchInfo` for the current commit's branch.
@@ -709,7 +713,7 @@ fn get_inserts(
                                                     // for merge commits (specifically the second parent) to keep the
                                                     // graph tighter.
                                                     if !compact
-                                                        || !info.is_merge
+                                                        || !info.is_merge()
                                                         || idx != *target_index
                                                         || p == 0
                                                     {
@@ -822,7 +826,7 @@ fn get_deviate_index(
 
     // TODO: in cases where no crossings occur, the rule for merge commits can also be applied to normal commits
     // See also branch::trace_branch()
-    if info.is_merge {
+    if info.is_merge() {
         max(index, min_split_idx)
     } else {
         (par_index as i32 - 1) as usize

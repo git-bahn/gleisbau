@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Changed
+
+- (BREAKING) Builder::with_settings now take Rc<Settings> as argument.
+- (BREAKING) TrackLayout::track_visual now take Binx as argument
+- (BREAKING) CommitInfo::is_merge is now a function.
+- (BREAKING) track::BranchInfo::new arguments simplified. 
+
+### Deprecated
+
+- GitGraph will be deprecated in some future release.
+
+### Removed
+
+- Mutex on GitGraph.track
+
 ### Fixed
 
 - Support for octo-merges (more than 2 parents)
