@@ -1,3 +1,4 @@
+#![doc(hidden)]
 /*! 32 bit index type macro.
 
 This module defines a macro [crate::define_u32_index].
@@ -28,6 +29,7 @@ Example:
     let result = &my_vec[small_inx];
 
 */
+#[doc(hidden)]
 #[macro_export]
 macro_rules! define_u32_index {
     (
