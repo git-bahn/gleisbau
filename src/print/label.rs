@@ -2,7 +2,7 @@
 a UI to show, even though only one of them will determine the looks
 used. This module provides add-on decoration not present in
 [TrackMap](crate::track::TrackMap)
-or [TraclLayout](crate::layout::TrackLayout).
+or [TrackLayout](crate::layout::TrackLayout).
 */
 
 // TODO The current implementation preserves the pre 0.7 term+svg color
@@ -109,7 +109,7 @@ fn extract_branches(
 
     let mut counter: usize = 0;
     for (br, tp) in actual_branches {
-        let Some(n) = br.get().name() else {
+        let Some(n) = br.get().name().ok() else {
             continue;
         };
         let Some(t) = br.get().target() else {

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (BREAKING) TrackLayout::track_visual now take Binx as argument
 - (BREAKING) CommitInfo::is_merge is now a function.
 - (BREAKING) track::BranchInfo::new arguments simplified. 
+- Upgrade to git2 0.21
 
 ### Deprecated
 

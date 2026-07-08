@@ -256,7 +256,11 @@ impl<'a> CommitFieldFormatter<'a> {
     }
 
     fn format_subject(&mut self, mode: usize) -> Result<(), String> {
-        let summary = self.commit.summary().unwrap_or("");
+        let summary = self
+            .commit
+            .summary()
+            .map_err(|err| err.to_string())?
+            .unwrap_or("");
         self.handle_mode(mode, !summary.is_empty());
         self.out.push_str(summary);
         Ok(())
@@ -378,7 +382,8 @@ pub fn format_oneline(
     }
     .unwrap();
 
-    write!(out, "{} {}", branches, commit.summary().unwrap_or("")).unwrap();
+    let summary = commit.summary().unwrap_or(None).unwrap_or("");
+    write!(out, "{} {}", branches, summary).unwrap();
 
     if let Some(wrap) = wrapping {
         textwrap::fill(&out, wrap)
@@ -469,7 +474,7 @@ pub fn format_commit_metadata(
         out_vec.push("".to_string());
         append_wrapped(
             &mut out_vec,
-            format!("    {}", commit.summary().unwrap_or("")),
+            format!("    {}", commit.summary().unwrap_or(None).unwrap_or("")),
             wrapping,
         );
         out_vec.push("".to_string());

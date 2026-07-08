@@ -3,6 +3,17 @@ which order tracks should be placed.
 
 It is intended as last step before printing. Decoration of commits,
 e.g. with tags and branch labels, should be done during printing.
+
+# Coordinate system
+The layout is done in a 2D coordinate system:
+- row is defined as an index into TrackMap.commits
+- column is defined per branch track.
+
+Printing may also add extra rows or columns as the output format
+requires. For example, the unicode print will have twice the number
+of columns, and occasionally an extra row if lines cannot be drawn
+on a single line without colliding. For more information, see
+the [print](crate::print) module.
 */
 
 use std::cmp::max;
@@ -27,22 +38,37 @@ define_u32_index!(
 );
 
 /**
-    Given a range of commits in a [TrackMap] you can construct a [TrackLayout]
-    which will assign columns and colours to the tracks.
+    A layout of tracks assigns columns and colours to them.
+
+    Use [layout_track_range] to construct a [TrackLayout]
 */
 pub struct TrackLayout {
-    // Specifies which commits are rendered
+    /// Specifies which commits are rendered.
+    ///
+    /// *Note*: The range may be larger than what is valid in [TrackMap]
     source: Range<usize>,
-    // Map a TrackMap.branch index to a TrackLayout.branch_visual index
+    /// Map a TrackMap.branch index to a TrackLayout.branch_visual index
     track_visual: HashMap<Binx, Vinx>,
-    // Visuals for all tracks in the rendered range
+    /// Visuals for all tracks in the rendered range
     branch_visual: Vec<BranchVis>,
 }
 
 impl TrackLayout {
-    /// Iterate all index into TrackMap.commits used for this layout
+    /// Ask if a commit index is in the layout
+    pub fn contains_commit_index(&self, commit_index: usize) -> bool {
+        self.source.contains(&commit_index)
+    }
+    /// Iterate all index into TrackMap.commits specified for this layout.
+    ///
+    /// *Note*: This include out-of-range index, so use TrackMap.commits.get()
     pub fn iter_commit_index(&self) -> impl Iterator<Item = usize> {
         self.source.clone()
+    }
+    /// First index into TrackMap in this layout.
+    ///
+    /// *Note*: Not checked for out-of-range, so use TrackMap.commits.get()
+    pub fn commit_index_start(&self) -> usize {
+        self.source.start
     }
     pub fn track_visual(&self, track_inx: Binx) -> Option<&BranchVis> {
         self.track_visual
@@ -52,9 +78,28 @@ impl TrackLayout {
     pub fn track_visual_vec(&self) -> &Vec<BranchVis> {
         &self.branch_visual
     }
+    /// Number of commits specified for this layout.
+    ///
+    /// *Note*: The specification may include invalid index.
+    pub fn commit_count(&self) -> usize {
+        self.source.len()
+    }
 }
 
-/// Branch properties for visualization.
+/** Branch properties for visualization.
+
+A track / branch is visualized as a vertical line, with some kind of
+continuation at the ends. This can be a simple stop, a link to some other
+track or some indicator that the track continues outside the commit range
+that was visualized.
+
+## Order Group
+Placing a track is a two step process: First find the track placement
+within an order group of tracks. When all tracks have been placed within
+their order group, compute the absolute column. Order group definition and their
+order is determined by a sequence of regex from [BranchSettings.order](crate::settings::BranchSettings.order)
+The first regex to match the track name is the order group for that track.
+*/
 pub struct BranchVis {
     /// The branch's column group (left to right)
     pub order_group: usize,
@@ -68,6 +113,31 @@ pub struct BranchVis {
     pub svg_color: String,
     /// The column the branch is located in
     pub column: Option<usize>,
+    /** Row range occupied by branch. It is defined as low and
+    high index into TrackMap.commits, but in Layout this index is used
+    as one of the axis.
+
+    - .0 is low value (youngest commit, near top)
+    - .1 is high value (oldest commit, near bottom)
+
+    This includes the row occupied by track fork (below oldest commit in track)
+    and the row occupied by track merge (above youngest commit).
+    The merge is done at the exact row of the merge target, but the fork
+    could be done at any row after fork commit as long as no child of the fork
+    has been passed yet.
+    Track end is a child of the fork commit, but there may be others as well.
+
+    This definition means two tracks can exist in the same column if they touch
+    at the ends, but not if they overlap.
+    */
+    pub row_range: (usize, usize),
+
+    /** Flag if branch continues outside visible range
+
+    - .0 is low end (youngest commit, near top)
+    - .1 is high end (oldest commit, near bottom)
+    */
+    pub open_end: (bool, bool),
 }
 
 impl BranchVis {
@@ -79,16 +149,23 @@ impl BranchVis {
             term_color,
             svg_color,
             column: None,
+            row_range: (0, 0),
+            open_end: (false, false),
         }
     }
 }
-/// Generates a TrackLayout by extracting and calculating visual data for
-/// branches active within a specific commit range.
+/**
+    Construct a [TrackLayout] from a range of commits in a [TrackMap].
+
+    This will assign columns and colours to the tracks and store that
+    information in the layout.
+*/
 pub fn layout_track_range(
     track_map: &TrackMap,
     range: Range<usize>,
     settings: &Settings,
 ) -> Result<TrackLayout, String> {
+    log::trace!("layout_track_range(_,({},{}),_)", &range.start, &range.end);
     let mut branch_visuals = Vec::new();
     let mut track_visual_map = HashMap::new();
 
@@ -98,14 +175,13 @@ pub fn layout_track_range(
     // --- Pass 1: Create initial BranchVis (Colors and Order Groups) ---
     for i in range.clone() {
         // Find track assigned to commit
-        let commit = &track_map.commits[i];
+        let Some(commit) = &track_map.commits.get(i) else {
+            // Ignore requests for commits outside the valid range
+            continue;
+        };
         let Some(b_idx) = commit.branch_trace else {
-            todo!("Decide how to handle commit without track");
-            /*
-                Do I want to show it?
-                Perhaps to panic?
-                Do I want to autogenerate a branch named "anonymous"?
-            */
+            log::error!("Commit #{} does not have a branch_trace", i);
+            return Err("All commits in track map must have a track".into());
         };
 
         // If the track does not yet have a visualization, create it
@@ -116,18 +192,33 @@ pub fn layout_track_range(
             color_counter += 1;
 
             let visual_data =
-                create_branch_visual(color_counter, branch_info, track_map, settings)?;
+                create_branch_visual(color_counter, branch_info, track_map, settings, i)?;
 
             let vis_idx = Vinx::new(branch_visuals.len());
             branch_visuals.push(visual_data);
             e.insert(vis_idx);
         }
+
+        // Update visualisation of track. This will continue a track in the layout
+        // so row_range.1 always points at the end row (highest index = oldest commit)
+        let vis_idx = track_visual_map[&b_idx];
+        let vis = &mut branch_visuals[vis_idx];
+        vis.row_range.1 = i;
     }
 
     // --- Pass 2: Connect Visual Groups (Target/Source Order Groups) ---
     // We iterate through the visuals we just created
     for (b_idx, &vis_idx) in track_visual_map.iter() {
         let branch = &track_map.all_branches[*b_idx];
+
+        // Extend low end of row range to include the merge target
+        if let Some(&merge_target_index) = branch
+            .merge_target
+            .as_ref()
+            .and_then(|oid| track_map.indices.get(oid))
+        {
+            branch_visuals[vis_idx].row_range.0 = merge_target_index;
+        }
 
         // Resolve Target Order Group
         if let Some(target_idx) = branch.target_branch {
@@ -138,6 +229,18 @@ pub fn layout_track_range(
             }
         }
 
+        // Extend high end of row range to include fork commit
+        if let Some(&fork_index) = Some(branch_visuals[vis_idx].row_range.1)
+            .map(|commit_inx| &track_map.commits[commit_inx])
+            .and_then(|commit| commit.parents.first())
+            .and_then(|oid| track_map.indices.get(oid))
+        {
+            // row_range.1 is inclusive, but we don't want to occupy a column
+            // used by a track that was merged here. By subtracting one, we move
+            // the fork point one commit up, which gives room to a merge, while
+            // preventing fork overlap.
+            branch_visuals[vis_idx].row_range.1 = fork_index - 1;
+        }
         // Resolve Source Order Group
         if let Some(source_idx) = branch.source_branch {
             // Check if the source branch has a visual in our current layout
@@ -205,11 +308,13 @@ pub fn get_deviate_index(
     }
 }
 
+/// Create a new [BranchVis] for a single commit
 fn create_branch_visual(
-    idx: usize,
-    branch: &BranchInfo,
+    idx: usize,           // Colour counter
+    branch: &BranchInfo,  // Branch to visualise
     track_map: &TrackMap, // Now we pass the map to look up other branches
     settings: &Settings,
+    row: usize, // Start visualisation as a dot on this row
 ) -> Result<BranchVis, String> {
     let mut name_to_color = &branch.name;
 
@@ -251,6 +356,8 @@ fn create_branch_visual(
         target_order_group: None,
         source_order_group: None,
         column: None,
+        row_range: (row, row),
+        open_end: (false, false),
     })
 }
 
@@ -275,13 +382,19 @@ pub fn assign_branch_columns(
         .track_visual
         .iter()
         .map(|(&branch_idx, &vis_idx)| {
-            let br = &track_map.all_branches[branch_idx];
             let vis = &layout.branch_visual[vis_idx];
+            // Open ends expand to capture all visible area.
+            let row_start = if vis.open_end.0 { 0 } else { vis.row_range.0 };
+            let row_end = if vis.open_end.1 {
+                layout.commit_count() - 1
+            } else {
+                vis.row_range.1
+            };
             (
                 branch_idx,
                 vis_idx,
-                br.range.0.unwrap_or(0),
-                br.range.1.unwrap_or(track_map.commits.len() - 1),
+                row_start,
+                row_end,
                 vis.source_order_group
                     .unwrap_or(settings.branches.order.len() + 1),
                 vis.target_order_group
@@ -311,7 +424,7 @@ pub fn assign_branch_columns(
     finalize_absolute_columns(&mut layout.branch_visual, occupied);
 }
 
-// For each order group, for each column inside that group, trach which rows are occupied.
+// For each order group, for each column inside that group, trace which rows are occupied.
 // occupied[group_idx][column_idx] = Vec<(start_commit_idx, end_commit_idx)>
 type Occupation = Vec<Vec<Vec<(usize, usize)>>>;
 
