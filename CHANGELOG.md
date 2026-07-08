@@ -8,10 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+
+## [0.7.4] - 2026-07-08
+
 ### Added
 
+- backend::git2 module
 - track::Builder for incrementally adding commits.
-- TrackMap::new() constructor
+- track::TrackMap::new() constructor
+- track::TrackMap::add_commit(..)
+- track::TrackMap::commit_at(commit_id: Oid)
+- track::TrackMap::branch_at(commit_id: Oid)
+- track::BranchInfoType enum
+- layout::TrackLayout.contains_commit_index(commit_index)
+- layout::TrackLayout.iter_commit_index()
+- layout::TrackLayout.commit_index_start()
+- layout::TrackLayout.commit_count()
+- layout::BranchVis.row_range
+- layout::BranchVis.open_end
+- Documentation of terms used in new algorithm
+- print::print_graph_terminal for printing only the graph
+- print::GraphLines for representing a printed graph
+- Merge patterns for octo-merge message
+- track::MergePatterns
 
 ### Changed
 
@@ -20,10 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (BREAKING) CommitInfo::is_merge is now a function.
 - (BREAKING) track::BranchInfo::new arguments simplified. 
 - Upgrade to git2 0.21
+- Add Oid parameter to TrackMap, CommitInfo, and BranchInfo
+  to facilitate multiple backends.
 
 ### Deprecated
 
 - GitGraph will be deprecated in some future release.
+- track::BranchInfo.range will move to layout module
 
 ### Removed
 
