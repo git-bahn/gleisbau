@@ -2,7 +2,7 @@
 a UI to show, even though only one of them will determine the looks
 used. This module provides add-on decoration not present in
 [TrackMap](crate::track::TrackMap)
-or [TraclLayout](crate::layout::TrackLayout).
+or [TrackLayout](crate::layout::TrackLayout).
 */
 
 // TODO The current implementation preserves the pre 0.7 term+svg color
