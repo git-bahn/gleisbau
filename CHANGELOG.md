@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+
+- panic if commits are not in topology order.
+
 
 ## [0.7.4] - 2026-07-08
 

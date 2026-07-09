@@ -383,6 +383,14 @@ fn draw_parent_lines(
             continue;
         };
 
+        // If parent is above commit the user did not sort commits by toppology
+        if *par_idx < layout.commit_index_start() {
+            log::error!("Commit {:?} parent[{}] {:?} was walked before its child. Gleisbau require topology order on commits.",
+                tracks.commits[idx].oid, p, par_oid,
+            );
+            panic!("Commit not in toplogy order");
+        }
+
         // index_map is from relative commit index to row
         let Some(&par_idx_map) = index_map.get(*par_idx - layout.commit_index_start()) else {
             // Parent was outside layout
