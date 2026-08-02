@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - panic if commits are not in topology order.
 
+### Fixed
+
+- panic when wrapping text caused an increase of output rows.
+
 
 ## [0.7.4] - 2026-07-08
 

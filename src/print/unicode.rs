@@ -110,11 +110,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
     )?;
 
     // Draw the graph on a grid
-    // Assume that each index in CommitRenderPlan is a unique row
-    let total_rows = inserts
-        .iter()
-        .map(|commit_entry| commit_entry.1.len())
-        .sum();
+    let total_rows = text_lines.len();
     let mut grid = draw_graph_lines(
         settings, tracks, layout, num_cols, &inserts, &index_map, total_rows,
     );
@@ -142,7 +138,13 @@ fn calculate_graph_dimensions(layout: &TrackLayout) -> usize {
     2 * max_column + 1
 }
 
-/// Iterates through commits to compute text lines, blank line inserts, and the index map.
+/** Compute text lines for commits in layout, and a map from commit to text line.
+
+If the graph needs more rows for a commit than the text does, insert None as
+lines to fill the remaining rows for that commit.
+If the text needs more rows than the graph for a commit, simply add more lines
+and increase offset to next entry in index_map.
+*/
 fn build_commit_lines_and_map(
     settings: &Settings,
     repository: &Repository,
@@ -153,8 +155,8 @@ fn build_commit_lines_and_map(
     inserts: &HashMap<usize, CommitRenderPlan>,
 ) -> Result<
     (
-        Vec<Option<String>>,
-        Vec<usize>, // index_map: from (commit index relative to layout) to grid row
+        Vec<Option<String>>, // text_lines
+        Vec<usize>,          // index_map: from (commit index relative to layout) to grid row
     ),
     String,
 > {
@@ -323,6 +325,16 @@ fn draw_graph_lines(
             .expect("All commits in range has precomputed visuals");
         let column = branch_visual.column.unwrap();
         let idx_map = index_map[idx - layout.commit_index_start()];
+        if idx_map >= grid.height {
+            // Item outside range of grid, exit loop
+            log::error!(
+                "Layout commit +{} at row {} is outside Grid range [0,{}]",
+                idx - layout.commit_index_start(),
+                idx_map,
+                grid.height - 1,
+            );
+            panic!("commit point outside grid");
+        }
 
         // Draw commit point (DOT or CIRCLE)
         grid.set(
@@ -534,6 +546,10 @@ fn get_inserts(
             // layout is too far down, so it includes index that are not
             // in TrackMap. Provide an empty render plan for that row.
             inserts.insert(idx, vec![vec![]]);
+            log::debug!(
+                "commit index {:?} was missing from tracks.commits -> zero height insert",
+                idx,
+            );
             continue;
         };
         // Get the visual column assigned to the branch of this commit. Unwrap is safe here
