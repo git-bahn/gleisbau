@@ -428,7 +428,7 @@ impl<Oid: Clone + Eq + Hash + Debug> Builder<Oid> {
                     log::error!(
                         "Commit #{} {:?} has parent[{}] which points back at commit #{} {:?}",
                         commit_index,
-                        &id,
+                        id,
                         p,
                         parent_index,
                         parent_oid,
