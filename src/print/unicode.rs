@@ -1,10 +1,11 @@
 /*! Create graphs in Unicode format with ANSI X3.64 / ISO 6429 colour codes
 
 Terminals usuallly have very tall characters, so to get a square ratio
-we need to double the number of rows. Although unicode allows drawing
+we need to double the number of columns. Although unicode allows drawing
 of lines, it does not support parallel lines inside the same symbol.
 To fix this we add extra "inserts", extra lines per commit as needed
-to draw lines without unwanted overlap.
+to draw lines without unwanted overlap. Extra lines can also be added if
+needed due to wrapping of long commit messages.
 
 The main functions are:
 - [print_unicode] - Legacy API. Prints both graph and commit text from a [GitGraph]
@@ -12,11 +13,11 @@ The main functions are:
 
 ## Coordinate system
 
-The final output is rendered onto a private 2D struct 'Grid' before printing.
-This is in the final coordinate system including extra columns and rows.
-[TrackLayout] uses the abstract coordinate system of commit row and
-track column, so you need to keep track of which coordinate system a
-function uses.
+Note that there are two different coordinate systems used:
+- Abstract: One row per commit, one column per track. Used by [TrackLayout]
+- Terminal: Many rows per commit due to inserts or wrapping, two columns per
+  track. Used internally for the final print to a terminal.
+
 */
 
 use std::cmp::max;

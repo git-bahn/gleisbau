@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - panic when wrapping text caused an increase of output rows.
+- print::unicode docs swapped row and column.
 
 
 ## [0.7.4] - 2026-07-08
