@@ -1,10 +1,11 @@
 /*! Create graphs in Unicode format with ANSI X3.64 / ISO 6429 colour codes
 
 Terminals usuallly have very tall characters, so to get a square ratio
-we need to double the number of rows. Although unicode allows drawing
+we need to double the number of columns. Although unicode allows drawing
 of lines, it does not support parallel lines inside the same symbol.
 To fix this we add extra "inserts", extra lines per commit as needed
-to draw lines without unwanted overlap.
+to draw lines without unwanted overlap. Extra lines can also be added if
+needed due to wrapping of long commit messages.
 
 The main functions are:
 - [print_unicode] - Legacy API. Prints both graph and commit text from a [GitGraph]
@@ -12,11 +13,11 @@ The main functions are:
 
 ## Coordinate system
 
-The final output is rendered onto a private 2D struct 'Grid' before printing.
-This is in the final coordinate system including extra columns and rows.
-[TrackLayout] uses the abstract coordinate system of commit row and
-track column, so you need to keep track of which coordinate system a
-function uses.
+Note that there are two different coordinate systems used:
+- Abstract: One row per commit, one column per track. Used by [TrackLayout]
+- Terminal: Many rows per commit due to inserts or wrapping, two columns per
+  track. Used internally for the final print to a terminal.
+
 */
 
 use std::cmp::max;
@@ -110,11 +111,7 @@ pub fn print_unicode(graph: &GitGraph, settings: &Settings) -> Result<UnicodeGra
     )?;
 
     // Draw the graph on a grid
-    // Assume that each index in CommitRenderPlan is a unique row
-    let total_rows = inserts
-        .iter()
-        .map(|commit_entry| commit_entry.1.len())
-        .sum();
+    let total_rows = text_lines.len();
     let mut grid = draw_graph_lines(
         settings, tracks, layout, num_cols, &inserts, &index_map, total_rows,
     );
@@ -142,7 +139,13 @@ fn calculate_graph_dimensions(layout: &TrackLayout) -> usize {
     2 * max_column + 1
 }
 
-/// Iterates through commits to compute text lines, blank line inserts, and the index map.
+/** Compute text lines for commits in layout, and a map from commit to text line.
+
+If the graph needs more rows for a commit than the text does, insert None as
+lines to fill the remaining rows for that commit.
+If the text needs more rows than the graph for a commit, simply add more lines
+and increase offset to next entry in index_map.
+*/
 fn build_commit_lines_and_map(
     settings: &Settings,
     repository: &Repository,
@@ -153,8 +156,8 @@ fn build_commit_lines_and_map(
     inserts: &HashMap<usize, CommitRenderPlan>,
 ) -> Result<
     (
-        Vec<Option<String>>,
-        Vec<usize>, // index_map: from (commit index relative to layout) to grid row
+        Vec<Option<String>>, // text_lines
+        Vec<usize>,          // index_map: from (commit index relative to layout) to grid row
     ),
     String,
 > {
@@ -323,6 +326,16 @@ fn draw_graph_lines(
             .expect("All commits in range has precomputed visuals");
         let column = branch_visual.column.unwrap();
         let idx_map = index_map[idx - layout.commit_index_start()];
+        if idx_map >= grid.height {
+            // Item outside range of grid, exit loop
+            log::error!(
+                "Layout commit +{} at row {} is outside Grid range [0,{}]",
+                idx - layout.commit_index_start(),
+                idx_map,
+                grid.height - 1,
+            );
+            panic!("commit point outside grid");
+        }
 
         // Draw commit point (DOT or CIRCLE)
         grid.set(
@@ -382,6 +395,14 @@ fn draw_parent_lines(
             );
             continue;
         };
+
+        // If parent is above commit the user did not sort commits by toppology
+        if *par_idx < layout.commit_index_start() {
+            log::error!("Commit {:?} parent[{}] {:?} was walked before its child. Gleisbau require topology order on commits.",
+                tracks.commits[idx].oid, p, par_oid,
+            );
+            panic!("Commit not in toplogy order");
+        }
 
         // index_map is from relative commit index to row
         let Some(&par_idx_map) = index_map.get(*par_idx - layout.commit_index_start()) else {
@@ -526,6 +547,10 @@ fn get_inserts(
             // layout is too far down, so it includes index that are not
             // in TrackMap. Provide an empty render plan for that row.
             inserts.insert(idx, vec![vec![]]);
+            log::debug!(
+                "commit index {:?} was missing from tracks.commits -> zero height insert",
+                idx,
+            );
             continue;
         };
         // Get the visual column assigned to the branch of this commit. Unwrap is safe here

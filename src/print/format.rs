@@ -418,7 +418,7 @@ pub fn format_commit_metadata(
     if let Some(color) = hash_color {
         write!(out, "commit {}", id.to_string().fixed(color))
     } else {
-        write!(out, "commit {}", &id)
+        write!(out, "commit {}", id)
     }
     .map_err(|err| err.to_string())?;
 
